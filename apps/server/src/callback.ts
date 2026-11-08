@@ -194,6 +194,8 @@ export class ElevenLabsPhotonCallback implements CallbackProvider {
           conversation_initiation_client_data: {
             dynamic_variables: {
               question: request.question,
+              // Same text under the name the agents' First message uses ("{{greeting}}").
+              greeting: request.question,
               contact_name: request.contactName,
               request_id: request.id,
               claim: request.claim,

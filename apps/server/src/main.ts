@@ -30,7 +30,12 @@ const { app, contacts } = createApp({
   callbackProvider,
   photonWebhookSecret: env.PHOTON_WEBHOOK_SECRET,
   elevenlabsWebhookSecret: env.ELEVENLABS_WEBHOOK_SECRET,
-  screenerOptions: { subscriberName: env.SUBSCRIBER_NAME || undefined, thinking: env.SCREENER_THINKING === "true" },
+  screenerOptions: {
+    subscriberName: env.SUBSCRIBER_NAME || undefined,
+    thinking: env.SCREENER_THINKING === "true",
+    // A real phone has to ring and be picked up before anyone speaks: don't decide on "silence" too early.
+    listenTimeoutMs: Number(env.SCREENER_LISTEN_TIMEOUT_MS) || 90_000,
+  },
 });
 
 const server = serve({ fetch: app.fetch, port }, () => {
@@ -45,13 +50,14 @@ const server = serve({ fetch: app.fetch, port }, () => {
     [
       "",
       "  Magenta-Guard server is up",
-      `  URL       http://localhost:${port}`,
-      `  Screener  ${agentConfig.apiKey ? `Nemotron · ${agentConfig.model}` : "UNAVAILABLE: set NVIDIA_API_KEY in .env (calls will not be connected)"}`,
-      `  Texts     ${agentConfig.llmProvider === "mock" ? "legacy text pipeline, mock brain" : `legacy text pipeline, ${agentConfig.model}`}`,
-      `  Registry  ${registryPath} (${contacts.length} trusted contacts)`,
-      `  Callback  ${callbackDesc}`,
-      `  Inbound   ${env.PHOTON_WEBHOOK_SECRET ? "POST /webhooks/photon (HMAC verified)" : "POST /webhooks/photon disabled (set PHOTON_WEBHOOK_SECRET)"}`,
-      `  Answers   ${env.ELEVENLABS_WEBHOOK_SECRET ? "POST /webhooks/elevenlabs (signature verified)" : "POST /webhooks/elevenlabs disabled (set ELEVENLABS_WEBHOOK_SECRET); polling the transcript instead"}`,
+      `  URL        http://localhost:${port}`,
+      `  Screener   ${agentConfig.apiKey ? `Nemotron · ${agentConfig.model}` : "UNAVAILABLE: set NVIDIA_API_KEY in .env (calls will not be connected)"}`,
+      `  Texts      ${agentConfig.llmProvider === "mock" ? "legacy text pipeline, mock brain" : `legacy text pipeline, ${agentConfig.model}`}`,
+      `  Registry   ${registryPath} (${contacts.length} trusted contacts)`,
+      `  Callback   ${callbackDesc}`,
+      `  Voice Dial ${env.ELEVENLABS_DIAL_AGENT_ID ? `POST /api/calls/dial (agent: ${env.ELEVENLABS_DIAL_AGENT_ID})` : "disabled (set ELEVENLABS_DIAL_AGENT_ID)"}`,
+      `  Inbound    ${env.PHOTON_WEBHOOK_SECRET ? "POST /webhooks/photon (HMAC verified)" : "POST /webhooks/photon disabled (set PHOTON_WEBHOOK_SECRET)"}`,
+      `  Answers    ${env.ELEVENLABS_WEBHOOK_SECRET ? "POST /webhooks/elevenlabs (signature verified)" : "POST /webhooks/elevenlabs disabled (set ELEVENLABS_WEBHOOK_SECRET); polling the transcript instead"}`,
       "",
     ].join("\n"),
   );

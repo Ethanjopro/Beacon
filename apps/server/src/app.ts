@@ -5,6 +5,7 @@ import {
   CallerSays,
   CodeWordCheck,
   DEFAULT_AGENT_CONFIG,
+  DialCall,
   NewCall,
   NewEvent,
   NewTrustedContact,
@@ -27,7 +28,16 @@ import { ElevenLabsPhotonCallback, type CallbackProvider } from "./callback.js";
 import { CallSessions } from "./calls.js";
 import { applyVerifyOverrides, toPublicContact } from "./contacts.js";
 import {
+  DialManager,
+  sseContentChunk,
+  sseEndCallChunk,
+  sseFinishChunk,
+  SSE_DONE,
+  type DialManagerOptions,
+} from "./dial.js";
+import {
   normalizeEventCall,
+  normalizeHandle,
   normalizePhotonWebhook,
   normalizeScenarioCall,
   normalizeSimCall,
@@ -63,6 +73,9 @@ export interface CreateAppOptions {
   elevenlabsWebhookSecret?: string;
   /** Outbound phone call provider when request.channel === "call". */
   callbackProvider?: CallbackProvider;
+  /** Live voice dial manager. */
+  dialManager?: DialManager;
+  dialOptions?: DialManagerOptions;
   /** Swap the agent (tests). */
   agentFactory?: (deps: Parameters<typeof createAgent>[0], config: Partial<AgentConfig>) => Agent;
   clock?: () => Date;
@@ -78,7 +91,7 @@ export function verifySpectrumSignature(
   rawBody: string,
   sigHeader: string,
   tsHeader: string,
-  secret: string
+  secret: string,
 ): boolean {
   if (!sigHeader.startsWith("v0=")) return false;
   const receivedHex = sigHeader.slice(3);
@@ -170,6 +183,20 @@ export function createApp(options: CreateAppOptions = {}) {
         })
       : undefined);
 
+  const dialManager =
+    options.dialManager ??
+    new DialManager({
+      allowlist: options.dialOptions?.allowlist ?? options.env?.DIAL_ALLOWLIST,
+      token: options.dialOptions?.token ?? options.env?.DIAL_TOKEN,
+      agentId: options.dialOptions?.agentId ?? options.env?.ELEVENLABS_DIAL_AGENT_ID,
+      phoneNumberId: options.dialOptions?.phoneNumberId ?? options.env?.ELEVENLABS_PHONE_NUMBER_ID,
+      apiKey: options.dialOptions?.apiKey ?? options.env?.ELEVENLABS_API_KEY,
+      outboundUrl: options.dialOptions?.outboundUrl ?? options.env?.ELEVENLABS_OUTBOUND_URL,
+      customLlmSecret: options.dialOptions?.customLlmSecret ?? options.env?.ELEVENLABS_CUSTOM_LLM_SECRET,
+      fetch: options.dialOptions?.fetch,
+      log,
+    });
+
   const bus = new TraceBus(undefined, clock);
   const store = new Store();
   bus.subscribe((trace) => store.record(trace));
@@ -211,6 +238,7 @@ export function createApp(options: CreateAppOptions = {}) {
       })
       .finally(() => {
         sessions.close(event.id);
+        dialManager.clearActive(event.id);
         inflight.delete(job);
       });
     inflight.add(job);
@@ -283,6 +311,229 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!sessions.say(c.req.param("id"), text)) return c.json({ error: "No live call with that id" }, 404);
     return c.json({ ok: true });
   });
+
+  // ── Live Voice Dial: dial friend via ElevenLabs over Photon SIP trunk ──
+  app.post(API.callsDial, async (c) => {
+    // 1. Check DIAL_TOKEN if configured
+    const providedToken = c.req.header("X-Dial-Token") ?? c.req.header("x-dial-token");
+    if (!dialManager.isTokenValid(providedToken)) {
+      return c.json({ error: "Unauthorized: invalid or missing X-Dial-Token" }, 401);
+    }
+
+    // 2. Parse body
+    const { number, displayName } = await parseBody(c.req.raw, DialCall);
+    const normalizedTarget = normalizeHandle(number);
+
+    // 3. Check allowlist
+    if (!dialManager.isAllowed(normalizedTarget)) {
+      return c.json({ error: "Number not in dial allowlist" }, 403);
+    }
+
+    // 4. Ensure only ONE dial session at a time
+    if (dialManager.hasActive()) {
+      return c.json({ error: "A dial call is already in progress" }, 409);
+    }
+
+    // 5. Generate synthetic handle (+1555010xxxx)
+    // Real number must NEVER appear in trace, store, logs or response (hard rule 4)
+    const syntheticHandle = `+1555010${Math.floor(1000 + Math.random() * 9000)}`;
+    const callId = newEventId();
+
+    dialManager.setActive({
+      callId,
+      realNumber: normalizedTarget,
+      syntheticHandle,
+      startedAt: Date.now(),
+    });
+
+    // 6. Subscribe to the bus BEFORE ingesting to catch first agent disclosure turn
+    let unsubscribed = false;
+    const unsub = bus.subscribe(async (trace) => {
+      if (trace.eventId === callId && trace.type === "call.turn" && trace.speaker === "agent") {
+        if (unsubscribed) return;
+        unsubscribed = true;
+        unsub();
+        const greeting = trace.text;
+        try {
+          await dialManager.placeOutboundCall(callId, normalizedTarget, greeting);
+        } catch (err) {
+          log(`[dial] outbound call placement failed: ${err instanceof Error ? err.message : String(err)}`);
+          bus.emit(callId, { type: "error", message: "Failed to place outbound phone call" });
+          sessions.close(callId);
+          dialManager.clearActive(callId);
+        }
+      } else if (trace.eventId === callId && (trace.type === "call.verdict" || trace.type === "error")) {
+        if (!unsubscribed) {
+          unsubscribed = true;
+          unsub();
+        }
+        dialManager.clearActive(callId);
+      }
+    });
+
+    // 7. Ingest call into screener
+    const normalized: NormalizedCall = {
+      event: {
+        id: callId,
+        kind: "call",
+        source: "photon",
+        from: { handle: syntheticHandle, displayName: displayName || "Live caller" },
+        body: "",
+        threadId: `call_${syntheticHandle}`,
+      },
+    };
+    ingestCall(normalized);
+
+    return c.json({ callId }, 202);
+  });
+
+  // ── Custom LLM endpoint for ElevenLabs Conversational AI ──
+  const handleCustomLlm = async (c: any) => {
+    const authHeader = c.req.header("Authorization") ?? c.req.header("authorization");
+    if (!dialManager.isCustomLlmAuthValid(authHeader)) {
+      return c.json({ error: "Unauthorized" }, 401);
+    }
+
+    let body: any;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: "Body must be valid JSON" }, 400);
+    }
+
+    const callId =
+      body.dynamic_variables?.call_id ??
+      body.dynamic_variables?.callId ??
+      body.call_id ??
+      body.callId ??
+      c.req.query("call_id") ??
+      c.req.query("callId") ??
+      dialManager.getActiveCallId();
+
+    if (!callId || !sessions.has(callId)) {
+      return c.json({ error: "No active dial call session found" }, 404);
+    }
+
+    const userMessages = Array.isArray(body.messages) ? body.messages.filter((m: any) => m && m.role === "user") : [];
+    const lastUserMsg = userMessages.at(-1);
+    const userText = typeof lastUserMsg?.content === "string" ? lastUserMsg.content.trim() : "";
+
+    const isStreaming = body.stream !== false;
+
+    if (!userText) {
+      if (isStreaming) {
+        return new Response(sseFinishChunk("stop") + SSE_DONE, {
+          headers: {
+            "Content-Type": "text/event-stream; charset=utf-8",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+          },
+        });
+      }
+      return c.json({
+        id: "chatcmpl-empty",
+        object: "chat.completion",
+        created: Math.floor(clock().getTime() / 1000),
+        choices: [{ index: 0, message: { role: "assistant", content: "" }, finish_reason: "stop" }],
+      });
+    }
+
+    // Deliver caller speech into the screener session
+    sessions.say(callId, userText);
+
+    // Wait for the screener's next agent response or verdict
+    const result = await new Promise<{ type: "turn"; text: string } | { type: "verdict"; text?: string; endCall: boolean }>((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let pendingTurnText: string | undefined;
+      let microTimer: ReturnType<typeof setTimeout> | undefined;
+
+      const finish = (val: { type: "turn"; text: string } | { type: "verdict"; text?: string; endCall: boolean }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        clearTimeout(microTimer);
+        unsub();
+        resolve(val);
+      };
+
+      timer = setTimeout(() => {
+        finish({ type: "turn", text: "" });
+      }, 25_000);
+
+      const unsub = bus.subscribe((trace) => {
+        if (trace.eventId === callId && trace.type === "call.turn" && trace.speaker === "agent") {
+          pendingTurnText = trace.text;
+          // Wait a tick: if call.verdict follows in this turn (finalize), treat as verdict with endCall
+          microTimer = setTimeout(() => {
+            finish({ type: "turn", text: pendingTurnText! });
+          }, 20);
+        } else if (trace.eventId === callId && trace.type === "call.verdict") {
+          const actionText = trace.result.verdict.next_action;
+          finish({
+            type: "verdict",
+            text: pendingTurnText ?? actionText,
+            endCall: true,
+          });
+        }
+      });
+    });
+
+    if (result.type === "verdict") {
+      dialManager.clearActive(callId);
+    }
+
+    if (isStreaming) {
+      const streamText = result.type === "turn" ? result.text : (result.text ?? "");
+      const isEndCall = result.type === "verdict";
+
+      const stream = new ReadableStream({
+        start(controller) {
+          const encoder = new TextEncoder();
+          if (streamText) {
+            const words = streamText.split(" ");
+            for (let i = 0; i < words.length; i++) {
+              const token = (i === 0 ? "" : " ") + words[i];
+              controller.enqueue(encoder.encode(sseContentChunk(token)));
+            }
+          }
+          if (isEndCall) {
+            controller.enqueue(encoder.encode(sseEndCallChunk("verdict_reached")));
+            controller.enqueue(encoder.encode(sseFinishChunk("tool_calls")));
+          } else {
+            controller.enqueue(encoder.encode(sseFinishChunk("stop")));
+          }
+          controller.enqueue(encoder.encode(SSE_DONE));
+          controller.close();
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    } else {
+      const content = result.text ?? "";
+      return c.json({
+        id: `chatcmpl-${randomBytes(8).toString("hex")}`,
+        object: "chat.completion",
+        created: Math.floor(clock().getTime() / 1000),
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content },
+            finish_reason: result.type === "verdict" ? "stop" : "stop",
+          },
+        ],
+      });
+    }
+  };
+
+  app.post("/v1/elevenlabs-llm/chat/completions", handleCustomLlm);
+  app.post("/v1/elevenlabs-llm", handleCustomLlm);
 
   // ── Photon webhook listener ──
   app.post("/webhooks/photon", async (c) => {
@@ -436,6 +687,7 @@ export function createApp(options: CreateAppOptions = {}) {
 
   app.post(API.reset, (c) => {
     sessions.clear();
+    dialManager.clearActive();
     broker.clear();
     store.clear();
     bus.clear();
@@ -457,6 +709,7 @@ export function createApp(options: CreateAppOptions = {}) {
     sessions,
     screener,
     callbackProvider,
+    dialManager,
     /** Registry contacts with live-demo overrides applied (code words included — server-side only). */
     get contacts() {
       return contacts();

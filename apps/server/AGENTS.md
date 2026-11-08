@@ -37,6 +37,8 @@ test/*.test.ts   app.request()-based tests (no real network)
 - `POST /webhooks/photon` — inbound signed message webhook; HMAC-SHA256 verified against `PHOTON_WEBHOOK_SECRET`
   with 5-minute timestamp tolerance. Feeds caller speech into active sessions or ingests a new screened call.
 - `POST /webhooks/elevenlabs` — webhook endpoint for post-call transcripts or live answer tools from ElevenLabs.
+- `POST /api/calls/dial` — live voice dial initiation. Validates allowlist (`DIAL_ALLOWLIST`) and optional token (`DIAL_TOKEN`), creates a screened call under a synthetic handle (`+1555010xxxx`), and triggers ElevenLabs outbound call over Photon SIP trunk once the agent's AI disclosure turn emits.
+- `POST /v1/elevenlabs-llm/chat/completions` (and `POST /v1/elevenlabs-llm`) — ElevenLabs Custom LLM endpoint for two-way live voice calls. Receives caller speech, feeds to `CallSessions.say()`, awaits screener turn or verdict via `bus.subscribe`, streams OpenAI SSE chunks back, and terminates the call via `end_call` tool call on verdict.
 
 ## Verification broker (`AgentDeps.verify`)
 The agent emits `verification.requested`, then awaits `verify(req)`. The broker:
@@ -90,6 +92,27 @@ Set `PUBLIC_BASE_URL=https://<your-tunnel-subdomain>` in `.env`.
    `POST /api/verifications/:id/reply`. Keep the tunnel up only during the live demo.
 6. Never log the teammate's number: `callback.ts` masks digit runs in its logs.
 
+### 4. ElevenLabs Conversational AI (Live Voice Dial Screener Agent)
+For live two-way calls dialed from the demo phone:
+1. Create a dedicated Conversational AI agent in ElevenLabs for live dialing.
+2. Under **Model / LLM**, select **Custom LLM**:
+   - URL: `https://<your-tunnel-subdomain>/v1/elevenlabs-llm`
+   - Authentication: configure Bearer token and set `ELEVENLABS_CUSTOM_LLM_SECRET=<secret>` in `.env`.
+3. In Agent Configuration:
+   - Dynamic Variables: add `call_id`, `greeting`.
+   - First Message: set to `{{greeting}}` (matches the Nemotron screener's AI disclosure turn).
+   - Tools: enable the **End Call** system tool (called when verdict is reached).
+   - Voice: choose an authoritative, clear voice (e.g. Brian, George, or Sarah).
+4. Environment Variables in `.env`:
+   - `ELEVENLABS_DIAL_AGENT_ID=agent_...` (or falls back to `ELEVENLABS_AGENT_ID`)
+   - `ELEVENLABS_CUSTOM_LLM_SECRET=...` (Bearer token protecting Custom LLM endpoint)
+   - `DIAL_ALLOWLIST=+15551234567,+15559876543` (comma-separated list of allowed dial numbers in E.164)
+   - `DIAL_TOKEN=...` (optional shared secret required in `X-Dial-Token` header)
+5. Security:
+   - Only numbers on `DIAL_ALLOWLIST` can be dialed.
+   - Only one live dial session can run at a time (409 if busy).
+   - The dialed person's real number is kept only in ephemeral memory and never appears in logs, traces, store, or responses (Hard Rule 4).
+
 ## Backlog
 **Must**
 - [x] Everything under Behavior + Verification broker + overrides
@@ -98,13 +121,15 @@ Set `PUBLIC_BASE_URL=https://<your-tunnel-subdomain>` in `.env`.
 - [x] Inbound Photon webhook listener (`POST /webhooks/photon`) with HMAC verification and live session routing
 - [x] Outbound callback provider (`ElevenLabsPhotonCallback`) and verification broker integration
 - [x] ElevenLabs webhook listener (`POST /webhooks/elevenlabs`) with post-call transcript processing and fallback polling
+- [x] Live voice dial route (`POST /api/calls/dial`) with allowlist/token gate, synthetic privacy handle, and ElevenLabs outbound trigger
+- [x] Custom LLM endpoint (`POST /v1/elevenlabs-llm/chat/completions`) streaming screener turns and terminating call with `end_call` on verdict
 
 **Should**
 - [ ] Optional JSON-file persistence of the last session (survive a restart mid-demo)
 - [x] Request log line per event with latency
 
 ## Status
-- Done: all Must items and the log-line Should item. `pnpm -F @beacon/server test` (39 tests) covers scenarios, calls, SSE format/replay/live, manual reply, timeout, reset, safe-word secrecy, env overrides, Photon webhook HMAC verification, and ElevenLabs callback resolution, signed-only ElevenLabs webhook, failed-call handling and number-free logs.
+- Done: all Must items and the log-line Should item. Tests cover scenarios, calls, SSE format/replay/live, manual reply, timeout, reset, safe-word secrecy, env overrides, Photon webhook HMAC verification, ElevenLabs callback resolution, signed-only ElevenLabs webhook, live voice dial authorization/allowlist/synthetic privacy, and Custom LLM OpenAI SSE streaming.
 - Run: `pnpm -F @beacon/server start` (or `pnpm dev` at the root).
 - Known gaps: JSON-file persistence not done; no auth (dev/demo only); SSE cursor ahead of server seq restarts from 0.
 
