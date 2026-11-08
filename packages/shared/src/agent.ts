@@ -34,6 +34,8 @@ export interface AgentConfig {
   allowSenderChallenge: boolean;
   /** If local triage puts pScam below this, skip the cloud LLM entirely (privacy + cost). */
   skipCloudBelow: number;
+  /** If local triage puts pScam at/above this (and no trusted contact is involved), decide on-device too. */
+  skipCloudAbove: number;
 }
 
 export const DEFAULT_AGENT_CONFIG: AgentConfig = {
@@ -44,6 +46,7 @@ export const DEFAULT_AGENT_CONFIG: AgentConfig = {
   verifyTimeoutMs: 45_000,
   allowSenderChallenge: false,
   skipCloudBelow: 0.08,
+  skipCloudAbove: 0.97,
 };
 
 export interface AgentDeps {
