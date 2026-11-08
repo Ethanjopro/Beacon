@@ -1,0 +1,26 @@
+node_modules/
+dist/
+build/
+coverage/
+.vite/
+*.log
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets — never commit real keys. Copy .env.example to .env.
+.env
+.env.*
+!.env.example
+
+# Sponsor-provided data: keep local unless the license says we may redistribute it.
+data/tmobile/*
+!data/tmobile/README.md
+
+# Generated eval output
+reports/*
+!reports/.gitkeep
+
+# Local scratch for agents
+.scratch/

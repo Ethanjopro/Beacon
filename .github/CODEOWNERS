@@ -1,0 +1,9 @@
+# Lane owners. Replace @Ethanjopro on each line with the lane owner's GitHub handle
+# once known (see roster in AGENTS.md). Later rules win.
+*                     @Ethanjopro
+/packages/shared/     @Ethanjopro
+/packages/agent/      @Ethanjopro
+/apps/phone/          @Ethanjopro
+/apps/server/         @Ethanjopro
+/apps/channels/       @Ethanjopro
+/packages/scenarios/  @Ethanjopro

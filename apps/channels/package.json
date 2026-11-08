@@ -1,0 +1,16 @@
+{
+  "name": "@beacon/channels",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx --env-file-if-exists=../../.env src/main.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@beacon/shared": "workspace:*",
+    "spectrum-ts": "^12.15.0",
+    "zod": "^4.1.0"
+  }
+}
