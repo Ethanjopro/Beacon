@@ -65,6 +65,22 @@ describe("extractJson", () => {
   });
 });
 
+describe("LlmClient rate limits", () => {
+  it("waits and retries a 429, switching to the next key when several are given", async () => {
+    const keys: string[] = [];
+    let n = 0;
+    const impl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      keys.push(String((init?.headers as Record<string, string>).authorization));
+      if (++n === 1) return new Response("slow down", { status: 429 });
+      return new Response(JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }] }), { status: 200 });
+    }) as typeof fetch;
+    const client = new LlmClient({ baseUrl: "https://nim.example/v1", apiKey: "key-a, key-b", fetch: impl, timeoutMs: 5000, deadlineMs: 15000 });
+    const reply = await client.chat({ model: "m", messages: [{ role: "user", content: "hi" }] });
+    expect(reply.content).toBe("ok");
+    expect(keys).toEqual(["Bearer key-a", "Bearer key-b"]);
+  });
+});
+
 describe("LlmClient", () => {
   it("retries once after a 5xx and runs the tool loop", async () => {
     const f = fakeFetch([{ status: 503 }, { tool_calls: [toolCall("t1", "echo", { v: 1 })] }, { content: '{"done":true}' }]);

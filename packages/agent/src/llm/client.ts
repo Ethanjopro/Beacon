@@ -41,6 +41,25 @@ export interface LlmClientOptions {
 
 export class LlmError extends Error {}
 
+/**
+ * NVIDIA's free tier allows roughly 10 requests a minute per key, and one screened call needs
+ * 6–12. NVIDIA_API_KEY may hold several comma-separated keys: requests use one key until it's
+ * throttled (429), then move to the next. The position is shared by every client in the process.
+ */
+const keyCursor = new Map<string, number>();
+const keysOf = (raw: string) => raw.split(",").map((k) => k.trim()).filter(Boolean);
+function currentKey(raw: string): string {
+  const keys = keysOf(raw);
+  return keys[(keyCursor.get(raw) ?? 0) % keys.length] ?? raw;
+}
+/** Moves to the next key; false when there's only one (nothing to rotate to). */
+function rotateKey(raw: string): boolean {
+  const keys = keysOf(raw);
+  if (keys.length < 2) return false;
+  keyCursor.set(raw, ((keyCursor.get(raw) ?? 0) + 1) % keys.length);
+  return true;
+}
+
 export class LlmClient {
   private readonly deadline: number;
 
@@ -51,14 +70,24 @@ export class LlmClient {
   /** One completion, with one retry on timeout / network error / 5xx / 429 / empty reply. */
   async chat(req: ChatRequest): Promise<Extract<ChatMessage, { role: "assistant" }>> {
     let lastError: unknown;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // Up to 2 tries normally; rate limits (429) get up to 5 tries with growing waits (1 s, 2 s, 4 s, 8 s).
+    for (let attempt = 0; attempt < 5; attempt++) {
       const remaining = this.deadline - Date.now();
       if (remaining <= 0) break;
       try {
         return await this.once(req, Math.min(this.opts.timeoutMs, remaining));
       } catch (err) {
         lastError = err;
+        const rateLimited = err instanceof LlmError && /HTTP 429\b/.test(err.message);
+        // Several keys ("k1,k2,k3"): a throttled key hands over to the next one right away.
+        if (rateLimited && this.opts.apiKey) rotateKey(this.opts.apiKey);
         if (err instanceof LlmError && /HTTP 4(0[0-9]|1[0-9])\b/.test(err.message) && !/HTTP 408/.test(err.message)) break; // client errors won't fix themselves
+        if (!rateLimited && attempt >= 1) break;
+        if (rateLimited) {
+          const wait = Math.min(1000 * 2 ** attempt, Math.max(0, this.deadline - Date.now() - 1000));
+          if (wait <= 0) break;
+          await new Promise((r) => setTimeout(r, wait));
+        }
       }
     }
     throw lastError instanceof Error ? lastError : new LlmError("LLM deadline exceeded");
@@ -89,7 +118,7 @@ export class LlmClient {
           headers: {
             "content-type": "application/json",
             accept: "application/json",
-            ...(this.opts.apiKey ? { authorization: `Bearer ${this.opts.apiKey}` } : {}),
+            ...(this.opts.apiKey ? { authorization: `Bearer ${currentKey(this.opts.apiKey)}` } : {}),
           },
           body: JSON.stringify(body),
           signal: controller.signal,
