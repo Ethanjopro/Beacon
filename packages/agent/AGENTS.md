@@ -87,7 +87,20 @@ test/*.test.ts
 - [ ] Embedding similarity to the library via `nemotron-3.5-embed-1b`
 
 ## Status
-Staged pipeline is in. `pnpm -F @beacon/agent test` (≈95 tests) + `pnpm -F @beacon/scenarios test` green.
+Staged pipeline is in. `pnpm -F @beacon/agent test` (108 tests) + `pnpm -F @beacon/scenarios test` green.
+
+**Do first (hour 0, before tuning anything):**
+- [ ] **Run the real Nemotron path once with a key.** It has only been tested against a fake fetch:
+      `<think>` output, tool calling on `nemotron-3-super`, and whether 2048 max_tokens is enough are unverified.
+- [ ] Measure live latency. With Nemotron, verification starts only after analysis returns (about 10–30 s),
+      which slows demo Act 2. Consider asking the contact *in parallel* with analysis when triage already
+      found a claimed contact.
+- [ ] Weights are hand-set; 27/27 on the library is a sanity check, not calibration. Calibrate on the
+      T-Mobile set with CENG 2 (`pnpm eval --dataset tmobile`).
+- [ ] `sim-swap-carrier-support` is typed `account_takeover_otp` (the `otp_request` rule at 2.2 outweighs
+      `carrier_account_threat` at 1.4), but the scenario expects `carrier_impersonation`, so the user gets
+      the OTP playbook. Decide which is right.
+- User-facing copy never guesses pronouns ("the real Mom denied sending it"). Keep it that way.
 
 **Layout (actual)**
 ```

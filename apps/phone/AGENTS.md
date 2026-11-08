@@ -111,6 +111,8 @@ no safe word leaks, console reply branches), banner copy, inbox, math, formattin
 **Screenshots:** `npx vite --port 9150 --strictPort` then `node scripts/screenshots.cjs [desk|mob]` (needs Playwright installed) → `.scratch/phone/` (gitignored).
 
 **Known gaps / next**
+- `?mock=1` canned set (toll, mom scam, mom-dinner-legit, grandson call) doesn't include
+  `mom-new-number-confirmed`, which is now demo Act 2b (`docs/DEMO.md`). Add a mock for it, or rehearse Act 2b on the live server.
 - `#/console` in a separate window only drives the phone in live mode (mock engine lives in the phone tab; use `d` there).
 - Guardian view, Spanish verdict copy, scam sound, live mic captions not started.
 - Bundle is ~560 kB (zod + motion); fine for the demo, code-split if it matters.
