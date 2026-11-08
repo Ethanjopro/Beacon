@@ -297,8 +297,9 @@ async function classifyReply(ctx: ScreenCtx, question: string, reply: string): P
           { role: "system", content: CALLBACK_REPLY_SYSTEM_PROMPT },
           { role: "user", content: buildCallbackReplyPrompt(question, text) },
         ],
-        maxTokens: 1024,
+        maxTokens: ctx.options.thinking ? 1024 : 200,
         temperature: 0,
+        extraBody: { chat_template_kwargs: { enable_thinking: ctx.options.thinking } },
       });
       return ReplyInterpretation.parse(extractJson(answer.content ?? "")).status;
     } catch {

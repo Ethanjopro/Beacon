@@ -20,9 +20,11 @@ export interface ChatRequest {
   messages: ChatMessage[];
   tools?: readonly unknown[];
   /** "none" forces a final answer while keeping tool definitions (some backends need them with tool messages). */
-  toolChoice?: "auto" | "none";
+  toolChoice?: "auto" | "none" | "required";
   temperature?: number;
   maxTokens?: number;
+  /** Provider-specific fields merged into the request body (e.g. NIM `chat_template_kwargs`). */
+  extraBody?: Record<string, unknown>;
 }
 
 export interface LlmClientOptions {
@@ -77,6 +79,7 @@ export class LlmClient {
       temperature: req.temperature ?? 0.2,
       max_tokens: req.maxTokens ?? 2048, // reasoning models spend tokens in <think> before the JSON
       ...(req.tools?.length ? { tools: req.tools, tool_choice: req.toolChoice ?? "auto" } : {}),
+      ...req.extraBody,
     };
     this.opts.onDispatch?.(req.model);
     try {
@@ -117,11 +120,13 @@ export async function runToolLoop(
   req: ChatRequest,
   execute: ToolExecutor,
   maxRounds = 4,
+  /** Force a tool call in the first round (models that skip tools without hidden reasoning). */
+  firstRound: "auto" | "required" = "auto",
 ): Promise<{ content: string; messages: ChatMessage[] }> {
   const messages = [...req.messages];
   for (let round = 0; round < maxRounds; round++) {
     const last = round === maxRounds - 1;
-    const reply = await client.chat({ ...req, messages, toolChoice: last ? "none" : "auto" });
+    const reply = await client.chat({ ...req, messages, toolChoice: last ? "none" : round === 0 ? firstRound : "auto" });
     messages.push(reply);
     if (!reply.tool_calls?.length) return { content: reply.content ?? "", messages };
     for (const call of reply.tool_calls) {

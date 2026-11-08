@@ -26,6 +26,8 @@ export interface ScreenerOptions {
   listenTimeoutMs?: number;
   /** Per Nemotron request. Default 30 s (reasoning + tool calls). */
   llmTimeoutMs?: number;
+  /** Nemotron's hidden reasoning. Off by default: ~0.7 s per turn instead of 10–20 s, same JSON. */
+  thinking?: boolean;
   /** HTTP client for Nemotron (tests inject a fake). Defaults to global fetch. */
   fetch?: typeof fetch;
 }

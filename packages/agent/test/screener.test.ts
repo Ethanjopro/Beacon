@@ -146,6 +146,19 @@ describe("call screener (Nemotron-driven)", () => {
     expect(spoken(trace, "agent")).not.toContain("Okay, connecting you.");
   });
 
+  it("sends thinking off by default and accepts a flattened verdict", async () => {
+    const nemotron = fakeFetch([
+      tool("t1", "scan_risk_patterns", {}),
+      json({ say: "I can't connect this call.", action: "end", risk: 90, signals: [], verdict: "SCAM", confidence: 91, evidence: ["Asked for gift cards."], next_action: "Blocked." }),
+    ]);
+    const { d } = deps(["Send gift cards now or your grandson stays in jail."]);
+    const result = await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
+    expect(result).toMatchObject({ decidedBy: "nemotron", action: "block", verdict: { verdict: "SCAM", confidence: 91 } });
+    const first = JSON.parse(nemotron.bodies[0]!);
+    expect(first.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(first.tool_choice).toBe("required");
+  });
+
   it("forces a decision when the caller goes silent", async () => {
     const nemotron = fakeFetch([
       json({ say: null, action: "end", risk: 55, signals: [], verdict: { verdict: "SUSPICIOUS", confidence: 60, evidence: ["The caller never said who they are."], next_action: "Sent to voicemail." } }),

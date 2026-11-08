@@ -12,7 +12,7 @@ const { app, contacts } = createApp({
   agentConfig,
   env,
   registryPath,
-  screenerOptions: { subscriberName: env.SUBSCRIBER_NAME || undefined },
+  screenerOptions: { subscriberName: env.SUBSCRIBER_NAME || undefined, thinking: env.SCREENER_THINKING === "true" },
 });
 
 const server = serve({ fetch: app.fetch, port }, () => {

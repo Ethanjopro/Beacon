@@ -27,7 +27,22 @@ export const ModelSignal = z.object({
   weight: z.number().finite().default(1),
 });
 
-export const ScreenerTurnOutput = z.object({
+/**
+ * Without hidden reasoning some models flatten the verdict:
+ * {"verdict": "SCAM", "confidence": 90, "evidence": [...], "next_action": "..."} at the top level.
+ * Lift those fields into the nested shape; treat "", "none" or "null" as no verdict.
+ */
+function liftFlatVerdict(v: unknown): unknown {
+  if (!v || typeof v !== "object") return v;
+  const o = v as Record<string, unknown>;
+  if (typeof o.verdict !== "string") return v;
+  const label = o.verdict.trim();
+  if (!label || /^(none|null|pending)$/i.test(label)) return { ...o, verdict: null };
+  const { confidence, evidence, next_action, ...rest } = o;
+  return { ...rest, verdict: { verdict: label, confidence, evidence, next_action } };
+}
+
+const TurnShape = z.object({
   say: z.string().trim().max(600).nullish(),
   action: z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), z.enum(["continue", "end"])),
   risk: percent.optional(),
@@ -36,4 +51,6 @@ export const ScreenerTurnOutput = z.object({
   signals: z.array(ModelSignal).max(8).default([]),
   verdict: ModelVerdict.nullish(),
 });
-export type ScreenerTurnOutput = z.infer<typeof ScreenerTurnOutput>;
+
+export const ScreenerTurnOutput = z.preprocess(liftFlatVerdict, TurnShape);
+export type ScreenerTurnOutput = z.infer<typeof TurnShape>;

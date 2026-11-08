@@ -42,6 +42,7 @@ export function createScreener(deps: ScreenerDeps, overrides: Partial<AgentConfi
     maxCallerTurns: options.maxCallerTurns ?? DEFAULTS.maxCallerTurns,
     listenTimeoutMs: options.listenTimeoutMs ?? DEFAULTS.listenTimeoutMs,
     llmTimeoutMs: options.llmTimeoutMs ?? DEFAULTS.llmTimeoutMs,
+    thinking: options.thinking ?? false,
     fetch: options.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
     ...(options.subscriberName ? { subscriberName: options.subscriberName } : {}),
   };
@@ -149,12 +150,20 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
         contacts: ctx.contacts,
         turns: ctx.turns.map((t) => ({ speaker: t.speaker, text: t.cloud })),
         checks: ctx.checks,
+        known: knownFacts(ctx),
         mustDecide: turn.mustDecide,
         turnsLeft: turn.turnsLeft,
       }),
     },
   ];
-  const req = { model: ctx.config.model, messages, tools: SCREENER_TOOLS, maxTokens: 12000, temperature: 0.3 };
+  const req = {
+    model: ctx.config.model,
+    messages,
+    tools: SCREENER_TOOLS,
+    maxTokens: ctx.options.thinking ? 12000 : 2000,
+    temperature: 0.3,
+    extraBody: { chat_template_kwargs: { enable_thinking: ctx.options.thinking } },
+  };
   // Remember this turn's tool results so a repair request can carry them without the tool protocol.
   const toolLog: string[] = [];
   const execute = async (name: string, args: Record<string, unknown>) => {
@@ -164,7 +173,8 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
   };
   let content = "";
   try {
-    content = (await runToolLoop(client, req, execute, 8)).content;
+    // Every turn starts with at least one tool call (lookup, code-word check, risk scan or callback); the model picks which.
+    content = (await runToolLoop(client, req, execute, 8, "required")).content;
   } catch (err) {
     // A model that keeps calling tools, or answers empty, gets one repair request below. Network errors still throw.
     if (!(err instanceof LlmError) || !/kept calling tools|empty reply/.test(err.message)) throw err;
@@ -181,12 +191,17 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
       model: req.model,
       maxTokens: req.maxTokens,
       temperature: req.temperature,
+      extraBody: req.extraBody,
       messages: [
         messages[0]!,
         messages[1]!,
         {
           role: "user",
-          content: `Tool results so far this turn:\n${toolLog.join("\n") || "(none)"}\n\nDo not call tools. Reply with ONLY the JSON object${wantVerdict ? ' with action "end" and a verdict' : ""}.`,
+          content: `Tool results so far this turn:\n${toolLog.join("\n") || "(none)"}\n\nDo not call tools. Reply with ONLY the JSON object${
+            wantVerdict
+              ? ' with action "end" and a complete verdict OBJECT, exactly like: "verdict": {"verdict": "SCAM", "confidence": 90, "evidence": ["reason one", "reason two"], "next_action": "what happens now"}'
+              : ""
+          }.`,
         },
       ],
     });
@@ -210,6 +225,14 @@ function describeParseFailure(content: string): string {
   }
   const parsed = ScreenerTurnOutput.safeParse(json);
   return parsed.success ? "ok" : parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`).join("; ");
+}
+
+/** What earlier turns already established, so the model doesn't spend a round re-running the same lookup. */
+function knownFacts(ctx: ScreenCtx): string | undefined {
+  const c = ctx.claimed;
+  if (!c) return undefined;
+  const ref = `CONTACT_${ctx.contacts.indexOf(c) + 1}`;
+  return `The caller claims to be ${ref} (${c.relationship}); already looked up: caller's number is ${contactBySender(ctx.call.from.handle, ctx.contacts)?.id === c.id ? "" : "NOT "}saved for them, code word ${c.safeWord?.trim() ? "on file" : "not set"}, callback number on file. No need to call lookup_trusted_contact again.`;
 }
 
 function tryParse(content: string): ScreenerTurnOutput | undefined {
