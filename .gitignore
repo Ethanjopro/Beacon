@@ -24,3 +24,6 @@ reports/*
 
 # Local scratch for agents
 .scratch/
+
+# Trusted registry (SQLite, created by the server)
+data/*.sqlite*

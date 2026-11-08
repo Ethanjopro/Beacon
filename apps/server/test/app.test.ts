@@ -220,7 +220,8 @@ describe("contacts", () => {
     expect(raw).not.toContain("safeWord");
     const list = JSON.parse(raw) as PublicContact[];
     expect(list.find((c) => c.id === "mom")?.hasSafeWord).toBe(true);
-    expect(list.find((c) => c.id === "sam")?.hasSafeWord).toBe(false);
+    expect(list.find((c) => c.id === "sam")?.hasSafeWord).toBe(true);
+    expect(list.find((c) => c.id === "ana")?.hasSafeWord).toBe(false);
   });
 
   it("never leaks a safe word through events or the trace", async () => {
