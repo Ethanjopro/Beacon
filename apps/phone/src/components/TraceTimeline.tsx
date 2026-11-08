@@ -1,5 +1,5 @@
 import type { Stage, TraceEvent } from "@beacon/shared";
-import { AlertTriangle, Check, CircleDashed, Gavel, Inbox, Loader2, ShieldCheck, Wrench } from "lucide-react";
+import { AlertTriangle, Bot, Check, CircleDashed, Gavel, Inbox, Loader2, PhoneCall, ShieldCheck, User, Wrench } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 import { STAGE_TEXT, formatPct, formatWeight, LABEL_COLOR, LABEL_TEXT } from "../lib/format";
@@ -157,6 +157,36 @@ function buildRows(view: EventView): Row[] {
       case "error":
         rows.push({ key, render: () => <Line icon={<AlertTriangle size={15} />} tone="bad">{item.message}</Line> });
         break;
+      case "call.turn":
+        rows.push({
+          key,
+          render: () => (
+            <Line icon={item.speaker === "agent" ? <Bot size={15} /> : <User size={15} />} tone="muted">
+              <span className="font-semibold text-ink">{item.speaker === "agent" ? "Magenta-Guard" : "Caller"}:</span> “{item.text}”
+            </Line>
+          ),
+        });
+        break;
+      case "call.status":
+        if (item.note) rows.push({ key, render: () => <Line icon={<PhoneCall size={15} />} tone="muted">{item.note}</Line> });
+        break;
+      case "call.verdict": {
+        const r = item.result;
+        const color = r.verdict.verdict === "SCAM" ? LABEL_COLOR.scam : r.verdict.verdict === "VERIFIED" ? LABEL_COLOR.safe : LABEL_COLOR.suspicious;
+        rows.push({
+          key,
+          render: () => (
+            <div className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 font-bold" style={{ color, background: `color-mix(in srgb, ${color} 13%, transparent)` }}>
+              <Gavel size={16} aria-hidden />
+              <span className="flex-1">
+                {r.verdict.verdict} · {r.verdict.confidence}% · {r.action}
+              </span>
+              <span className="tabular text-xs font-medium text-ink-3">{r.decidedBy === "error" ? "model unreachable" : `${(r.latencyMs / 1000).toFixed(1)} s`}</span>
+            </div>
+          ),
+        });
+        break;
+      }
     }
   }
   return rows;

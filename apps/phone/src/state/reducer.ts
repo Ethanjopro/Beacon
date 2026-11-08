@@ -1,6 +1,9 @@
 import type {
+  CallSpeaker,
+  CallStatus,
   IncomingEvent,
   PrivacyReport,
+  ScreeningResult,
   Signal,
   Stage,
   TraceEvent,
@@ -33,7 +36,22 @@ export interface EventView {
   errors: string[];
   /** ISO time of the first trace item we saw — used to time call transcripts. */
   firstAt: string;
+  /** Screened calls: what Magenta-Guard and the caller said, in order. */
+  turns: CallTurnView[];
+  callStatus?: { status: CallStatus; note?: string };
+  /** Screened calls: the final verdict + action. */
+  screening?: ScreeningResult;
 }
+
+export interface CallTurnView {
+  seq: number;
+  speaker: CallSpeaker;
+  text: string;
+  at: string;
+}
+
+/** True once the call screener has touched this call (vs. a scripted transcript replay). */
+export const isScreenedCall = (view: EventView) => Boolean(view.callStatus || view.turns.length || view.screening);
 
 export interface PhoneState {
   byId: Record<string, EventView>;
@@ -55,7 +73,7 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
 }
 
 function emptyView(ev: TraceEvent): EventView {
-  return { eventId: ev.eventId, trace: [], stages: {}, signals: [], errors: [], firstAt: ev.at };
+  return { eventId: ev.eventId, trace: [], stages: {}, signals: [], errors: [], firstAt: ev.at, turns: [] };
 }
 
 function applyTrace(state: PhoneState, ev: TraceEvent): PhoneState {
@@ -108,6 +126,16 @@ function foldTrace(view: EventView, ev: TraceEvent): EventView {
       break;
     case "error":
       next.errors = [...view.errors, ev.message];
+      break;
+    case "call.turn":
+      next.turns = [...view.turns, { seq: ev.seq, speaker: ev.speaker, text: ev.text, at: ev.at }];
+      break;
+    case "call.status":
+      next.callStatus = { status: ev.status, ...(ev.note ? { note: ev.note } : {}) };
+      break;
+    case "call.verdict":
+      next.screening = ev.result;
+      next.activeStage = undefined;
       break;
     case "thought":
     case "tool":

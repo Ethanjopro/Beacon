@@ -1,9 +1,10 @@
 import { Check } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { threadKeyOf } from "./state/reducer";
+import { isScreenedCall, threadKeyOf, type EventView } from "./state/reducer";
 import { useBeacon } from "./state/store";
 import { CallScreen } from "./screens/CallScreen";
+import { ScreeningScreen } from "./screens/ScreeningScreen";
 import { HomeScreen } from "./screens/HomeScreen";
 import { RecoveryScreen } from "./screens/RecoveryScreen";
 import { ThreadScreen } from "./screens/ThreadScreen";
@@ -91,7 +92,10 @@ export function PhoneApp({ compact, onFocusChange }: { compact: boolean; onFocus
           {screen.name === "thread" && (
             <ThreadScreen threadKey={screen.threadKey} onBack={() => setScreen({ name: "home" })} onOpenVerdict={setSheetId} />
           )}
-          {screen.name === "call" && state.byId[screen.eventId] && (
+          {screen.name === "call" && state.byId[screen.eventId] && isScreened(state.byId[screen.eventId]!) && (
+            <ScreeningScreen view={state.byId[screen.eventId]!} onDone={() => setScreen({ name: "home" })} />
+          )}
+          {screen.name === "call" && state.byId[screen.eventId] && !isScreened(state.byId[screen.eventId]!) && (
             <CallScreen
               view={state.byId[screen.eventId]!}
               onHangUp={() => {
@@ -180,6 +184,11 @@ function focusedEventId(screen: Screen, state: ReturnType<typeof useBeacon>["sta
     });
   }
   return undefined;
+}
+
+/** Live calls are answered by the Magenta-Guard screener; only the offline mock replays a pre-baked transcript. */
+function isScreened(view: EventView): boolean {
+  return isScreenedCall(view) || !view.event?.transcript?.length;
 }
 
 function vibrate(pattern: number[]): void {
