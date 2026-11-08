@@ -212,13 +212,25 @@ describe("call screener (Nemotron-driven)", () => {
     expect(got?.drill).toBeUndefined();
   });
 
-  it("forces a decision when the caller goes silent", async () => {
+  it("never asks the model to judge a call where nobody spoke (no invented reasons)", async () => {
     const nemotron = fakeFetch([
-      json({ say: null, action: "end", risk: 55, signals: [], verdict: { verdict: "SUSPICIOUS", confidence: 60, evidence: ["The caller never said who they are."], next_action: "Sent to voicemail." } }),
+      json({ say: null, action: "end", risk: 95, signals: [], verdict: { verdict: "SCAM", confidence: 95, evidence: ["Caller refused the code word."], next_action: "Blocked." } }),
     ]);
     const { d } = deps([]);
     const result = await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
-    expect(result).toMatchObject({ action: "voicemail", turns: 0, decidedBy: "nemotron" });
+    expect(result).toMatchObject({ action: "voicemail", turns: 0, decidedBy: "error", verdict: { verdict: "SUSPICIOUS", confidence: 0 } });
+    expect(result.verdict.evidence[0]).toMatch(/No caller speech/);
+    expect(nemotron.bodies).toHaveLength(0);
+  });
+
+  it("forces a decision after the caller stops talking", async () => {
+    const nemotron = fakeFetch([
+      json({ say: "What's this about?", action: "continue", risk: 40, signals: [] }),
+      json({ say: null, action: "end", risk: 55, signals: [], verdict: { verdict: "SUSPICIOUS", confidence: 60, evidence: ["Wouldn't say what it's about."], next_action: "Sent to voicemail." } }),
+    ]);
+    const { d } = deps(["Hi, is this the homeowner?"]);
+    const result = await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
+    expect(result).toMatchObject({ action: "voicemail", turns: 1, decidedBy: "nemotron" });
   });
 
   it("without a key: an error state that does not connect, and no network call", async () => {

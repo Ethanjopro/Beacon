@@ -97,6 +97,11 @@ async function screenCall(call: IncomingEvent, deps: ScreenerDeps, config: Agent
       if (out.action === "end" && out.verdict) decision = out;
       else if (out.say) speak(ctx, out.say);
     }
+    // Nothing heard at all: there is nothing for Nemotron to judge. Asking it anyway produced invented
+    // reasons ("refused the code word") on a call that never connected. Report it as what it is.
+    if (!decision && !ctx.turns.some((t) => t.speaker === "caller")) {
+      throw new ScreenerUnavailable("no caller speech reached Magenta-Guard (the call may not have connected)");
+    }
     if (!decision) {
       setStatus(ctx, "deciding");
       decision = await modelTurn(ctx, { mustDecide: true, turnsLeft: 0 });
@@ -309,14 +314,19 @@ function finalize(ctx: ScreenCtx, out: ScreenerTurnOutput, started: number): Scr
 /** Nemotron unreachable or broken: an error state, not a judgment. The call is not connected. */
 function errorResult(ctx: ScreenCtx, err: unknown, started: number): ScreeningResult {
   const reason = err instanceof Error ? err.message : String(err);
-  ctx.emit({ type: "error", message: `Screening model unavailable: ${reason.slice(0, 160)}` });
-  setStatus(ctx, "voicemail", "Not connected: the screening model couldn't be reached");
+  const silent = !ctx.turns.some((t) => t.speaker === "caller");
+  ctx.emit({ type: "error", message: silent ? `Couldn't screen: ${reason.slice(0, 160)}` : `Screening model unavailable: ${reason.slice(0, 160)}` });
+  setStatus(ctx, "voicemail", silent ? "Not connected: no caller speech reached Magenta-Guard" : "Not connected: the screening model couldn't be reached");
   return emitResult(ctx, {
     callId: ctx.call.id,
     verdict: {
       verdict: "SUSPICIOUS",
       confidence: 0,
-      evidence: ["Magenta-Guard couldn't reach its reasoning model, so this caller was not checked."],
+      evidence: [
+        silent
+          ? "No caller speech reached Magenta-Guard (the call may not have connected), so this caller was not checked."
+          : "Magenta-Guard couldn't reach its reasoning model, so this caller was not checked.",
+      ],
       next_action: "The call was not connected. If you know this person, call them back on the number you have saved for them.",
     },
     action: "voicemail",

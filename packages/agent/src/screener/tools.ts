@@ -153,6 +153,11 @@ function checkCodeWord(ctx: ScreenCtx, ref: unknown): unknown {
   }
   setStatus(ctx, "challenging", `Code word check for ${shortName(contact)}`);
   ctx.codeWordAttempts++;
+  if (!ctx.lastCallerRaw.trim()) {
+    // The caller hasn't said anything yet: an unanswered question is not a wrong code word.
+    ctx.emit({ type: "tool", name, status: "result", summary: "The caller hasn't answered yet" });
+    return { result: "no_answer_yet" };
+  }
   const match = codeWordMatches(ctx.lastCallerRaw, contact.safeWord);
   if (match) ctx.checks.codeWord = "matched";
   else if (ctx.checks.codeWord !== "matched") ctx.checks.codeWord = "failed";
