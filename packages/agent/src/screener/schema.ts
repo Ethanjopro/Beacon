@@ -44,7 +44,8 @@ function liftFlatVerdict(v: unknown): unknown {
 
 const TurnShape = z.object({
   say: z.string().trim().max(600).nullish(),
-  action: z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), z.enum(["continue", "end"])),
+  // Models sometimes invent actions ("challenge", "ask", "verify"): anything but "end" means keep talking.
+  action: z.preprocess((v) => (typeof v === "string" && v.trim().toLowerCase() === "end" ? "end" : "continue"), z.enum(["continue", "end"])),
   risk: percent.optional(),
   claimed_contact: z.string().nullish(),
   note: z.string().trim().max(240).nullish(),

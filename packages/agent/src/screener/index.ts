@@ -28,7 +28,7 @@ import { addSignal, forSubscriber, hear, resolveRef, setStatus, slug, speak, typ
 import { writeRecap } from "./recap.js";
 import { SCREENER_SYSTEM_PROMPT, buildScreenerUserPrompt } from "./prompts.js";
 import { ScreenerTurnOutput, type ModelVerdict } from "./schema.js";
-import { SCREENER_TOOLS, runScreenerTool } from "./tools.js";
+import { SCREENER_TOOLS, callerNamed, runScreenerTool } from "./tools.js";
 
 export type { ScreenerOptions } from "./context.js";
 export { codeWordMatches } from "./tools.js";
@@ -252,7 +252,10 @@ function tryParse(content: string): ScreenerTurnOutput | undefined {
 
 /** Fold the model's turn into the call: claim, new evidence, running risk, activity note. */
 function applyTurn(ctx: ScreenCtx, out: ScreenerTurnOutput): void {
-  if (!ctx.claimed && out.claimed_contact) ctx.claimed = resolveRef(ctx, out.claimed_contact);
+  if (!ctx.claimed && out.claimed_contact) {
+    const c = resolveRef(ctx, out.claimed_contact);
+    if (c && callerNamed(ctx, c)) ctx.claimed = c; // only a contact the caller actually named
+  }
   for (const s of out.signals) {
     const weight = Math.max(-LLM_WEIGHT_CAP, Math.min(LLM_WEIGHT_CAP, s.weight));
     addSignal(ctx, { id: `llm_${slug(s.id)}`, title: forSubscriber(ctx, s.title), detail: forSubscriber(ctx, s.detail) || "Nemotron's judgment.", weight, source: "llm" });

@@ -3,7 +3,7 @@
  * registry, and hand the model only what it needs: refs, booleans, statuses.
  * Code words and saved numbers never appear in a tool result or a trace.
  */
-import type { VerificationOutcome, VerificationRequest, VerificationResult } from "@beacon/shared";
+import type { TrustedContact, VerificationOutcome, VerificationRequest, VerificationResult } from "@beacon/shared";
 import { LlmClient } from "../llm/client.js";
 import { ReplyInterpretation, extractJson } from "../llm/schema.js";
 import { matchRule } from "../pipeline/triage.js";
@@ -103,6 +103,12 @@ function lookupTrusted(ctx: ScreenCtx, claim: string): unknown {
     ctx.emit({ type: "tool", name, status: "result", summary: "Not in the subscriber's trusted contacts" });
     return { found: false };
   }
+  // Only a contact the CALLER actually claimed counts. Otherwise the model can wander into an
+  // unrelated contact (a "carrier agent" became "Mom") and challenge/callback the wrong person.
+  if (!callerNamed(ctx, contact)) {
+    ctx.emit({ type: "tool", name, status: "result", summary: "The caller hasn't claimed to be one of the subscriber's contacts" });
+    return { found: false, note: "The caller has not claimed to be this contact. Only challenge a contact the caller names." };
+  }
   ctx.claimed ??= contact;
   const hasCodeWord = Boolean(contact.safeWord?.trim());
   ctx.emit({
@@ -140,7 +146,7 @@ export function codeWordMatches(attempt: string, codeWord: string): boolean {
 
 function checkCodeWord(ctx: ScreenCtx, ref: unknown): unknown {
   const name = "check_code_word";
-  const contact = ctx.claimed ?? resolveRef(ctx, ref);
+  const contact = claimedContact(ctx, ref);
   ctx.emit({ type: "tool", name, status: "called", summary: "Checking the caller's answer against the family code word (on the server — never sent to the model)" });
   if (!contact) {
     ctx.emit({ type: "tool", name, status: "error", summary: "No claimed contact to check against" });
@@ -195,7 +201,7 @@ function scanRiskPatterns(ctx: ScreenCtx): unknown {
 async function requestCallback(ctx: ScreenCtx, ref: unknown, rawQuestion: string): Promise<unknown> {
   const name = "request_callback";
   if (ctx.callback) return { status: callbackStatus(ctx.callback.outcome.status), note: "already called once" };
-  const contact = ctx.claimed ?? resolveRef(ctx, ref);
+  const contact = claimedContact(ctx, ref);
   if (!contact) {
     ctx.emit({ type: "tool", name, status: "error", summary: "No claimed contact to call back" });
     return { error: "look up the claimed contact first" };
@@ -315,4 +321,24 @@ async function classifyReply(ctx: ScreenCtx, question: string, reply: string): P
     }
   }
   return "unclear";
+}
+
+/** Did the caller's own words name this contact (by name, alias like "grandson", or the redaction ref)? */
+export function callerNamed(ctx: ScreenCtx, contact: TrustedContact): boolean {
+  const cloud = callerText(ctx, "cloud");
+  const ref = `CONTACT_${ctx.contacts.indexOf(contact) + 1}`;
+  if (cloud.includes(`[${ref} `) || cloud.includes(`${ref}]`)) return true;
+  // Compare whole words: "mom" must not match "moment".
+  const words = ` ${callerText(ctx, "local").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()} `;
+  const names = [contact.name.replace(/\s*\(.*?\)\s*/g, " ").trim(), ...contact.aliases]
+    .map((a) => a.toLowerCase().replace(/^(your|my|the)\s+/, "").replace(/[^\p{L}\p{N}]+/gu, " ").trim())
+    .filter((a) => a.length >= 2);
+  return names.some((a) => words.includes(` ${a} `));
+}
+
+/** The contact being verified: the one already claimed, or a ref the caller actually named. Never one they didn't. */
+function claimedContact(ctx: ScreenCtx, ref: unknown): TrustedContact | undefined {
+  if (ctx.claimed) return ctx.claimed;
+  const c = resolveRef(ctx, ref);
+  return c && callerNamed(ctx, c) ? c : undefined;
 }

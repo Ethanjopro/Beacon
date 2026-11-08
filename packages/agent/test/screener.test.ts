@@ -110,6 +110,21 @@ describe("call screener (Nemotron-driven)", () => {
     expect(sent).not.toMatch(/\bSam\b/);
   });
 
+  it("won't challenge or call back a contact the caller never named (carrier impostor)", async () => {
+    const nemotron = fakeFetch([
+      tool("t1", "lookup_trusted_contact", { claim: "mom" }), // the model wanders to an unrelated contact
+      tool("t2", "request_callback", { contact_ref: "CONTACT_1", question: "Is someone calling for you?" }),
+      json({ say: "Who are you calling for?", action: "challenge", risk: 80, signals: [] }), // invented action
+      json({ say: "I can't connect this call.", action: "end", risk: 95, signals: [], verdict: { verdict: "SCAM", confidence: 94, evidence: ["Asked for a one-time PIN."], next_action: "Blocked." } }),
+    ]);
+    const { d, requests, trace } = deps(["I'm James from your phone carrier. Read me the one-time PIN we just texted you.", "Just give me the PIN."]);
+    const result = await createScreener(d, NVIDIA, { fetch: nemotron.impl, recap: false }).screen(call());
+    expect(requests).toHaveLength(0); // nobody was called back
+    expect(result).toMatchObject({ decidedBy: "nemotron", action: "block", checks: { codeWord: "not_checked", callback: "not_placed" } });
+    expect(result.claimedContactId).toBeUndefined();
+    expect(spoken(trace, "agent")).toContain("Who are you calling for?");
+  });
+
   it("bridges a caller who gives the right code word", async () => {
     const nemotron = fakeFetch([
       tool("t1", "lookup_trusted_contact", { claim: "CONTACT_2" }),
