@@ -89,7 +89,7 @@ export const VOICE_CLONE_RECOVERY: RecoveryStep[] = [
   {
     id: "call_sam",
     title: "Call Sam at his saved number",
-    detail: "Beacon already asked him. Hearing his real voice settles it.",
+    detail: "Magenta-Guard already asked him. Hearing his real voice settles it.",
     urgency: "now",
     action: { kind: "call", label: "Call Sam", target: "+15550100002" },
   },
@@ -102,7 +102,7 @@ export const VOICE_CLONE_RECOVERY: RecoveryStep[] = [
   {
     id: "safe_word",
     title: "Set a family safe word",
-    detail: "A word only your family knows. Beacon checks it on this phone and never sends it anywhere.",
+    detail: "A word only your family knows. Magenta-Guard checks it on the server and never sends it anywhere.",
     urgency: "soon",
   },
   REPORT_FTC,

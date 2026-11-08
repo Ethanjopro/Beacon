@@ -24,6 +24,7 @@ export const trustedContacts: TrustedContact[] = [
     aliases: ["sam", "sammy", "grandson", "your grandson", "nieto", "tu nieto", "abuela"],
     handles: ["+15550100002"],
     verifyVia: { channel: "simulator", handle: "+15550100002" },
+    safeWord: "maple canoe",
   }),
   TrustedContact.parse({
     id: "ana",

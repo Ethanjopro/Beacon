@@ -10,6 +10,7 @@ export * from "./verification.js";
 export * from "./verdict.js";
 export * from "./trace.js";
 export * from "./scenario.js";
+export * from "./screening.js";
 export * from "./api.js";
 export * from "./agent.js";
 export * from "./confidence.js";

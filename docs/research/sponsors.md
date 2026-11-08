@@ -48,6 +48,23 @@ Source: https://hackutd-2026.notion.site/Sponsor-Tracks-3bd63cec7740808c9e89e4e2
 - Docs: https://photon.codes/docs/ · voice: https://photon.codes/docs/spectrum-ts/providers/voice
 - Photon runs hackathon prize programs and credits; check their Discord for HackUTD terms.
 
+### Re-checked 2026-11-07 (for the Magenta-Guard call screener)
+- **Outbound PSTN call: possible, SIP only.** Our SIP client dials `sip.spectrum.photon.codes:5061` (TLS),
+  username = project ID, password = project secret, caller ID = an iMessage line the project owns, number
+  in E.164. Spectrum is not a registrar. No REST/SDK method places a call; "SDK call control: Coming soon".
+- **Inbound call:** SIP only, to a public SIP URI you register in the dashboard (needs a public host,
+  TLS cert, open SIP/RTP ports). "Do not expect voice calls in app.messages or app.webhook()".
+- **No STT/TTS** and no answer/play/gather/transfer primitives; RTP is unencrypted.
+- **Webhooks** (`app.webhook()` or the dashboard Webhooks service): `messages` events only. Signature
+  `v0=` + hex HMAC-SHA256(secret, `v0:<timestamp>:<rawBody>`), headers `X-Spectrum-Signature`,
+  `X-Spectrum-Timestamp`, 5-minute tolerance; bad signature → 401, missing headers → 400.
+- **Photon v2 beta** (`app.beta.photon.codes`, npm `@photon-ai/api`, "Beta is a preview"): voice = a Photon
+  number's SIP trunk bridged to an **ElevenLabs** agent (`sip.photon.codes:5061`, outbound profile with a
+  digest password). ElevenLabs places the outbound call and runs TTS/STT; Photon only carries it. Needs a
+  dedicated (not shared) line. Plans: Free $0 base, Pro $25/mo.
+- Takeaway: ingest stays simulated (the diagram says so); the real outbound callback is either the beta
+  + ElevenLabs path or our own SIP client. Decide before step 4.
+
 ## Useful facts for the pitch
 - FTC: consumers reported losing **$12.5B** to fraud in 2024 (published March 2025).
   ⚠ Check whether the 2025 figure has been released and use the newest one.

@@ -3,6 +3,7 @@ import type { TrustedContact } from "./contacts.js";
 import type { TraceBody } from "./trace.js";
 import type { Verdict } from "./verdict.js";
 import type { VerificationReply, VerificationRequest } from "./verification.js";
+import type { ScreeningResult } from "./screening.js";
 
 /**
  * What the host hands back from `AgentDeps.verify`. The host only DELIVERS the
@@ -65,6 +66,30 @@ export interface AgentDeps {
   emit: (eventId: string, body: TraceBody) => void;
   /** Injectable clock for tests. */
   now?: () => Date;
+}
+
+/**
+ * The seam between the host and the call screener (Magenta-Guard). Like
+ * AgentDeps, plus `listen`: the host delivers what the caller says next.
+ */
+export interface ScreenerDeps {
+  /** The trusted-contact registry (includes code words — the screener compares them locally, never sends them). */
+  contacts: () => TrustedContact[];
+  /**
+   * Wait for the caller's next utterance: live speech-to-text, a sim script line, or a judge typing.
+   * Resolves `null` on silence (timeout) or hang-up. MUST resolve, never reject.
+   */
+  listen: (callId: string, timeoutMs: number) => Promise<string | null>;
+  /** Out-of-band callback to the claimed contact's known-good number (same protocol as AgentDeps.verify). */
+  verify: (request: VerificationRequest) => Promise<VerificationResult>;
+  emit: (eventId: string, body: TraceBody) => void;
+  now?: () => Date;
+}
+
+export interface Screener {
+  readonly config: AgentConfig;
+  /** Answer and screen one call (kind "call"). Never throws: a model failure yields a decidedBy "error" result that does not bridge. */
+  screen: (call: IncomingEvent) => Promise<ScreeningResult>;
 }
 
 export interface Agent {

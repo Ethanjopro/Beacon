@@ -1,7 +1,7 @@
 {
-  "name": "Beacon",
-  "short_name": "Beacon",
-  "description": "Scam detection tells you it's probably fake. Beacon finds out.",
+  "name": "Magenta-Guard",
+  "short_name": "Magenta-Guard",
+  "description": "An AI call screener that answers first and only lets verified callers through.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#08111f",

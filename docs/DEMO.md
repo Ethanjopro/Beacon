@@ -1,8 +1,29 @@
 # Demo run-sheet (target: 3 minutes)
 
+## Magenta-Guard (current — work in progress, rehearse before relying on it)
+
+Needs network: the call screener runs on real Nemotron (`NVIDIA_API_KEY` in `.env`); there is no
+offline fallback for calls by design. If Nemotron is unreachable, the call shows "couldn't screen this
+call" and is not connected; say so honestly.
+
+| Beat | Fire | What the judge sees | Status |
+|---|---|---|---|
+| **1 Setup** | phone signup screen | Subscriber adds "Sam (grandson)" + code word; "Protection live" | UI not built yet (registry API is: `POST /api/trusted`) |
+| **2 Attack** | `pnpm scenario grandson-bail-call` (or Photon) | A call claiming to be Sam; the phone does NOT ring: Magenta-Guard answers | Works (sim) |
+| **3 Screen** | — | AI disclosure, live transcript, risk meter and red-flag chips rising | Works |
+| **4 Challenge** | — | Asks for the code word (wrong), puts the caller on hold, calls Sam's saved number | Code word works; callback is simulated until the Photon call lands (step 4) |
+| **5 Verdict** | — | SCAM card: confidence, plain-language reasons, both check results, "call blocked" | Works |
+| **6 After** | — | 30-second "what gave it away" recap + practice drill | Not built yet |
+| **Judge's turn** | free-text input | A judge types their own scam line; same pipeline, Nemotron reacts for real | API works (`POST /api/calls` + `/say`); UI is step 3 |
+
+---
+
+## Legacy Beacon run-sheet (text pipeline)
+
 Everything here works **offline** first: the real server and agent run locally with
 `LLM_PROVIDER=mock`, and trusted contacts are simulated. Live mode (real Nemotron +
-real iMessage) is an upgrade, not a dependency.
+real iMessage) is an upgrade, not a dependency. **Act 3 (`grandson-bail-call`) now goes
+through the Magenta-Guard screener instead.**
 
 ## Setup (before judges arrive)
 - Laptop: `pnpm dev`, browser on `http://localhost:5173` (phone frame + agent-trace panel).

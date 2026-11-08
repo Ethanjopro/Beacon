@@ -28,6 +28,7 @@ interface BeaconStore {
   simpleMode: boolean;
   setSimpleMode: (on: boolean) => void;
   resetDemo: () => Promise<void>;
+  deleteConversation: (threadKey: string) => void;
 }
 
 const Ctx = createContext<BeaconStore | null>(null);
@@ -64,7 +65,7 @@ export function BeaconProvider({ backend, children }: { backend: Backend; childr
 
   useEffect(() => {
     const disconnect = backend.connect({
-      onTrace: (ev, meta) => pacer.push({ ev, replay: meta.replay }, { immediate: meta.replay }),
+      onTrace: (ev, meta) => pacer.push({ ev, replay: meta.replay }, { immediate: meta.replay || ev.type.startsWith("call.") || ev.type === "event.received" }),
       onStatus: setStatus,
       onReset: () => {
         pacer.clear();
@@ -95,10 +96,11 @@ export function BeaconProvider({ backend, children }: { backend: Backend; childr
   }, []);
 
   const resetDemo = useCallback(() => backend.reset(), [backend]);
+  const deleteConversation = useCallback((threadKey: string) => dispatch({ type: "deleteConversation", threadKey }), []);
 
   const value = useMemo<BeaconStore>(
-    () => ({ backend, state, status, contacts, arrival, verdictArrival, simpleMode, setSimpleMode, resetDemo }),
-    [backend, state, status, contacts, arrival, verdictArrival, simpleMode, setSimpleMode, resetDemo],
+    () => ({ backend, state, status, contacts, arrival, verdictArrival, simpleMode, setSimpleMode, resetDemo, deleteConversation }),
+    [backend, state, status, contacts, arrival, verdictArrival, simpleMode, setSimpleMode, resetDemo, deleteConversation],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

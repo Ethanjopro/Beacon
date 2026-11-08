@@ -1,5 +1,8 @@
 # Architecture
 
+> **Magenta-Guard (the call screener) is described in the root `AGENTS.md` → "Architecture" and
+> "API contract".** This page documents the original Beacon text pipeline, which still runs for texts.
+
 ```mermaid
 flowchart LR
   subgraph Phone["apps/phone (React, mobile-first)"]

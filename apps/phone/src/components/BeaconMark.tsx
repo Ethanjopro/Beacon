@@ -7,7 +7,7 @@ export function BeaconMark({ size = 24, glow = false, className = "" }: { size?:
       viewBox="0 0 32 32"
       aria-hidden="true"
       className={className}
-      style={glow ? { filter: "drop-shadow(0 0 6px rgba(255,200,97,0.65))" } : undefined}
+      style={glow ? { filter: "drop-shadow(0 0 6px rgba(217,154,199,0.45))" } : undefined}
     >
       <path d="M16 9 L2 4.5 L2 13.5 Z" fill="var(--color-lamp)" opacity="0.35" />
       <path d="M16 9 L30 4.5 L30 13.5 Z" fill="var(--color-lamp)" opacity="0.35" />
@@ -18,3 +18,4 @@ export function BeaconMark({ size = 24, glow = false, className = "" }: { size?:
     </svg>
   );
 }
+

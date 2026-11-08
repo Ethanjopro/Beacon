@@ -1,4 +1,5 @@
 import type { Stage } from "@beacon/shared";
+import { callPhase } from "../lib/architecture";
 import type { EventView } from "../state/reducer";
 import { BeaconMark } from "./BeaconMark";
 import { ModePill } from "./DemoConsole";
@@ -9,15 +10,19 @@ import { ModePill } from "./DemoConsole";
  */
 
 const STEPS: { title: string; detail: string; stages: Stage[] }[] = [
-  { title: "Detect", detail: "On-device rules first. Nemotron only for the hard cases.", stages: ["ingest", "triage", "analyze"] },
-  { title: "Ask the real person", detail: "Checks the claim with Mom on her saved number, never the sender.", stages: ["challenge", "verify"] },
-  { title: "Honest verdict", detail: "A probability, a range, and every reason with its weight.", stages: ["verdict"] },
-  { title: "Get safe", detail: "Steps matched to the scam and to what you already did.", stages: ["recover"] },
+  { title: "Answer first", detail: "The AI picks up before your phone rings and says it's an AI.", stages: ["ingest", "triage"] },
+  { title: "Interview", detail: "NVIDIA Nemotron asks who's calling and why, and scans for scam tactics.", stages: ["analyze"] },
+  { title: "Challenge", detail: "Family code word, plus a callback to the real person's saved number.", stages: ["challenge", "verify"] },
+  { title: "Verdict", detail: "Verified callers get through. Scams are blocked, with the reasons.", stages: ["verdict", "recover"] },
 ];
 
 function activeStep(view?: EventView): number {
   if (!view) return -1;
-  if (view.verdict) return view.verdict.label === "safe" ? 2 : 3;
+  if (view.event?.kind === "call") {
+    const phase = callPhase(view); // 0 ingest, 1 bus, 2 orchestrator, 3 challenge, 4 handset
+    return phase < 0 ? -1 : phase <= 1 ? 0 : phase - 1;
+  }
+  if (view.verdict) return 3;
   const stage = view.activeStage ?? (view.verification?.request ? "verify" : "triage");
   return STEPS.findIndex((s) => s.stages.includes(stage));
 }
@@ -29,11 +34,14 @@ export function StoryRail({ view, mode, status }: { view?: EventView; mode: "liv
       <div>
         <div className="flex items-center gap-3">
           <BeaconMark size={44} glow className="text-ink" />
-          <span className="text-[32px] font-bold tracking-tight">Beacon</span>
+          <span className="text-[30px] font-bold tracking-tight">Magenta-Guard</span>
         </div>
         <p className="mt-5 text-[22px] font-medium leading-snug text-ink-2">
-          Scam detection tells you it's probably fake. Beacon finds out.
+          An AI that answers your calls first. Only callers who prove who they are get through.
         </p>
+        <a href="#/architecture" className="mt-3 inline-block text-[14px] font-semibold text-lamp underline-offset-4 hover:underline" data-testid="architecture-link">
+          How it works →
+        </a>
       </div>
 
       <ol className="flex flex-col gap-5">
@@ -47,7 +55,7 @@ export function StoryRail({ view, mode, status }: { view?: EventView; mode: "liv
                 style={{
                   background: on ? "var(--color-lamp)" : "var(--color-harbor-700)",
                   color: on ? "var(--color-harbor-900)" : "var(--color-ink-2)",
-                  boxShadow: on ? "0 0 22px rgba(255,200,97,0.55)" : "none",
+                  boxShadow: on ? "0 0 22px rgba(217,154,199,0.35)" : "none",
                 }}
               >
                 {i + 1}
@@ -70,3 +78,4 @@ export function StoryRail({ view, mode, status }: { view?: EventView; mode: "liv
     </div>
   );
 }
+

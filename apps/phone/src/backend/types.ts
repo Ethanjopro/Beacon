@@ -1,4 +1,4 @@
-import type { PublicContact, ScenarioSummary, TraceEvent, VerificationRequest } from "@beacon/shared";
+import type { NewCall, PublicContact, ScenarioSummary, TraceEvent, VerificationRequest } from "@beacon/shared";
 import type { ConnectionStatus } from "../lib/stream";
 
 /**
@@ -25,6 +25,10 @@ export interface Backend {
   reset(): Promise<void>;
   /** Subscribe to pending-verification changes; live mode polls. */
   watchPending(onChange: (pending: VerificationRequest[]) => void): () => void;
+  /** Live only: place a call to the protected phone (judge free-text input). */
+  startCall?(call: NewCall): Promise<{ callId: string }>;
+  /** Live only: the caller says something on a live call. */
+  say?(callId: string, text: string): Promise<void>;
   /** Mock only: let scripted contacts answer by themselves. */
   autoReply?: { get(): boolean; set(on: boolean): void };
 }

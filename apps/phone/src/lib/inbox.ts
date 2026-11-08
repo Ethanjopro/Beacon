@@ -53,11 +53,13 @@ export interface Conversation {
 }
 
 export function buildConversations(state: PhoneState, contacts: PublicContact[]): Conversation[] {
+  const deleted = new Set(state.deletedKeys ?? []);
   const live = new Map<string, Conversation>();
   for (const id of state.order) {
     const view = state.byId[id];
     if (!view?.event) continue;
     const key = threadKeyOf(view.event);
+    if (deleted.has(key) || deleted.has(view.event.from.handle)) continue;
     if (live.has(key)) continue; // order is newest first
     const handle = view.event.from.handle;
     const seed = SEED_THREADS.find((s) => s.handle === handle);
@@ -73,7 +75,7 @@ export function buildConversations(state: PhoneState, contacts: PublicContact[])
       seed,
     });
   }
-  const seeds = SEED_THREADS.filter((s) => !live.has(s.handle)).map<Conversation>((s) => ({
+  const seeds = SEED_THREADS.filter((s) => !live.has(s.handle) && !deleted.has(s.handle)).map<Conversation>((s) => ({
     key: s.handle,
     handle: s.handle,
     name: s.name,

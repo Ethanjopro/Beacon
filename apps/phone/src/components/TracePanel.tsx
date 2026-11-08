@@ -4,6 +4,7 @@ import { useEffect, useRef, type RefObject } from "react";
 import { formatHandle, LABEL_COLOR, LABEL_TEXT, STAGE_TEXT, STAGE_SHORT, contactForHandle } from "../lib/format";
 import type { EventView } from "../state/reducer";
 import { useBeacon } from "../state/store";
+import { ARCH, callPhase } from "../lib/architecture";
 import { MathCard } from "./MathCard";
 import { AnimatedPct, RiskMeter } from "./RiskMeter";
 import { TraceTimeline } from "./TraceTimeline";
@@ -22,7 +23,7 @@ export function TracePanel({ view, onOpenConsole }: { view?: EventView; onOpenCo
     <aside className="flex h-full min-h-0 flex-col overflow-hidden rounded-[28px] border border-harbor-700/80 bg-harbor-900/80" data-testid="trace-panel">
       <div className="flex items-center justify-between border-b border-harbor-700/80 px-6 py-4">
         <h2 className="text-[17px] font-bold">Agent trace</h2>
-        <span className="text-[13px] text-ink-3">What Beacon is doing, step by step</span>
+        <span className="text-[13px] text-ink-3">What Magenta-Guard is doing, step by step</span>
       </div>
       {view ? <PanelBody view={view} scroller={scroller} /> : <EmptyPanel onOpenConsole={onOpenConsole} />}
     </aside>
@@ -63,7 +64,7 @@ function PanelBody({ view, scroller }: { view: EventView; scroller: RefObject<HT
         <div className="mt-1.5">
           <RiskMeter p={p} band={view.verdict?.band} />
         </div>
-        <StageRail view={view} />
+        {ev?.kind === "call" ? <CallRail view={view} /> : <StageRail view={view} />}
       </div>
 
       <div ref={scroller} className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-6 py-4">
@@ -78,6 +79,33 @@ function PanelBody({ view, scroller }: { view: EventView; scroller: RefObject<HT
     </>
   );
 }
+
+/** For calls: the five architecture boxes, lit as the call moves through them. */
+function CallRail({ view }: { view: EventView }) {
+  const phase = callPhase(view);
+  return (
+    <ol className="mt-4 grid grid-cols-5 gap-1" aria-label="Call path" data-testid="call-rail">
+      {ARCH.map((box, i) => {
+        const active = phase === i && !view.screening;
+        const lit = phase >= i;
+        return (
+          <li key={box.id} className="flex flex-col gap-1.5" title={box.title}>
+            <span className={`h-1.5 rounded-full ${active ? "animate-pulse" : ""}`} style={{ backgroundColor: lit ? "var(--color-lamp)" : "var(--color-harbor-700)" }} />
+            <span className={`truncate text-[11px] font-semibold leading-tight ${lit ? "text-ink-2" : "text-ink-3/60"}`}>{RAIL_SHORT[box.id]}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+const RAIL_SHORT: Record<(typeof ARCH)[number]["id"], string> = {
+  ingest: "Ingest",
+  bus: "Event bus",
+  orchestrator: "Nemotron",
+  challenge: "Challenge",
+  handset: "Handset",
+};
 
 function StageRail({ view }: { view: EventView }) {
   return (
@@ -107,11 +135,11 @@ function EmptyPanel({ onOpenConsole }: { onOpenConsole: () => void }) {
     <div className="flex flex-1 flex-col items-center justify-center px-10 text-center" data-testid="trace-empty">
       <p className="text-[19px] font-semibold">Waiting for something suspicious</p>
       <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-ink-2">
-        When a text or call arrives, every step Beacon takes shows up here: the evidence, its weight, who it asked, and what left the phone.
+        When a text or call arrives, every step Magenta-Guard takes shows up here: the evidence, its weight, who it asked, and what left the phone.
       </p>
       {status === "down" && backend.mode === "live" ? (
         <p className="mt-4 max-w-sm text-[14px] text-warn">
-          The Beacon server isn't running. Start it with <span className="font-mono">pnpm dev</span>, or{" "}
+          The Magenta-Guard server isn't running. Start it with <span className="font-mono">pnpm dev</span>, or{" "}
           <a href="?mock=1" className="font-semibold underline">
             use demo mode
           </a>

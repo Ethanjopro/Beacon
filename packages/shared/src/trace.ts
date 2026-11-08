@@ -2,6 +2,7 @@ import { z } from "zod";
 import { IncomingEvent } from "./events.js";
 import { Signal, Verdict, PrivacyReport } from "./verdict.js";
 import { VerificationRequest, VerificationOutcome } from "./verification.js";
+import { CallRecap, CallSpeaker, CallStatus, ScreeningResult } from "./screening.js";
 
 /**
  * Pipeline stages, in order. Not every stage runs for every event
@@ -45,6 +46,13 @@ export const TraceBody = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("verdict"), verdict: Verdict }),
   z.object({ type: z.literal("error"), message: z.string(), stage: Stage.optional() }),
+  // ── Call screening (Magenta-Guard) ──
+  /** One spoken line on the screened call. Caller text is scrubbed of code words. */
+  z.object({ type: z.literal("call.turn"), speaker: CallSpeaker, text: z.string() }),
+  z.object({ type: z.literal("call.status"), status: CallStatus, note: z.string().optional() }),
+  z.object({ type: z.literal("call.verdict"), result: ScreeningResult }),
+  /** After the call: the "what gave it away" recap + practice drill. */
+  z.object({ type: z.literal("call.recap"), recap: CallRecap }),
 ]);
 export type TraceBody = z.infer<typeof TraceBody>;
 

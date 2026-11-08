@@ -1,9 +1,10 @@
 import type { ScenarioSummary, VerificationRequest } from "@beacon/shared";
-import { Loader2, MessageSquareText, PhoneIncoming, RotateCcw, Send, X, Zap } from "lucide-react";
+import { House, Loader2, MessageSquareText, PhoneIncoming, RotateCcw, Send, X, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 import { formatHandle, CHANNEL_TEXT } from "../lib/format";
 import { useBeacon } from "../state/store";
 import { VerdictPill } from "./Badges";
+import { JudgePanel } from "./JudgePanel";
 
 /**
  * Demo console (press D, or open #/console in a second window): fire
@@ -53,12 +54,14 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
       if (!standalone) onClose?.();
     });
 
-  // Number keys fire scenarios 1–9 while the console is open (not while typing a reply).
+  const orderedScenarios = scenarios ? orderScenarios(scenarios) : undefined;
+
+  // Number keys run scenarios 1–9 while the console is open (not while typing a reply).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       const n = Number(e.key);
-      const s = Number.isInteger(n) && n >= 1 ? scenarios?.[n - 1] : undefined;
+      const s = Number.isInteger(n) && n >= 1 ? orderedScenarios?.[n - 1] : undefined;
       if (s) {
         e.preventDefault();
         void fire(s.id);
@@ -71,6 +74,11 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid="demo-console">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-harbor-700 px-5 py-4 sm:px-6">
+        {standalone && (
+          <a href="#" className="inline-flex items-center gap-1.5 rounded-xl bg-harbor-700 px-3 py-2 text-sm font-semibold text-ink-2">
+            <House size={15} /> Home
+          </a>
+        )}
         <Zap size={18} className="shrink-0 text-lamp" />
         <h2 className="whitespace-nowrap text-[19px] font-bold">Demo console</h2>
         <span className="order-last w-full sm:order-none sm:w-auto">
@@ -95,14 +103,21 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
       <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
         {loadError && <p className="mb-4 rounded-xl bg-warn/10 px-4 py-3 text-sm text-warn">{loadError}</p>}
 
-        <h3 className="mb-3 text-[13px] font-bold text-ink-2">Scenarios</h3>
-        {!scenarios ? (
+        <h3 className="mb-1 text-[13px] font-bold text-ink-2">Be the scammer</h3>
+        <p className="mb-3 text-[13px] text-ink-3">Type anything. It goes through the same pipeline as a real call, and Nemotron reacts live.</p>
+        <JudgePanel />
+
+        <div className="mb-3 mt-7 flex flex-wrap items-end justify-between gap-2">
+          <div><h3 className="text-[13px] font-bold text-ink-2">Preset scenarios</h3><p className="mt-1 text-[12px] text-ink-3">Mobile-network threats appear first. Run one through the live screening pipeline.</p></div>
+          <span className="rounded-full border border-lamp/20 bg-lamp/5 px-2.5 py-1 text-[10px] font-bold tracking-wide text-lamp">RUN = START DEMO</span>
+        </div>
+        {!orderedScenarios ? (
           <p className="flex items-center gap-2 text-sm text-ink-3">
             <Loader2 size={15} className="animate-spin" /> Loading scenarios…
           </p>
         ) : (
           <ul className="grid gap-2.5 sm:grid-cols-2">
-            {scenarios.map((s, i) => (
+            {orderedScenarios.map((s, i) => (
               <li key={s.id}>
                 <button
                   type="button"
@@ -126,7 +141,7 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
                     ))}
                     <span className="flex-1" />
                     <span className="text-[13px] font-bold text-lamp opacity-80 group-hover:opacity-100">
-                      {busy === `fire:${s.id}` ? "Firing…" : "Fire"}
+                      {busy === `fire:${s.id}` ? "Starting…" : "Run demo →"}
                     </span>
                   </span>
                 </button>
@@ -154,7 +169,7 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
         </div>
         {pending.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-harbor-600 px-4 py-4 text-sm text-ink-3">
-            No one is being asked right now. Fire the "Mom" scenario and Beacon's question will show up here.
+            No one is being asked right now. Run the "Mom" scenario and Magenta-Guard's question will show up here.
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
@@ -177,6 +192,11 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
       </div>
     </div>
   );
+}
+
+function orderScenarios(scenarios: ScenarioSummary[]): ScenarioSummary[] {
+  const mobileThreat = (scenario: ScenarioSummary) => /carrier|sim[ -]?swap|mobile|wireless|port[ -]?out|verification code|one-time code|2fa|otp/i.test(`${scenario.id} ${scenario.title} ${scenario.tags.join(" ")}`);
+  return scenarios.map((scenario, index) => ({ scenario, index, priority: mobileThreat(scenario) ? 0 : 1 })).sort((a, b) => a.priority - b.priority || a.index - b.index).map(({ scenario }) => scenario);
 }
 
 function PendingCard({ request, busy, onReply }: { request: VerificationRequest; busy: boolean; onReply: (text: string) => void }) {

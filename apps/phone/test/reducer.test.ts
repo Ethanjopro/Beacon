@@ -95,6 +95,16 @@ describe("phoneReducer", () => {
     expect(eventsInThread(s, "+1").map((v) => v.eventId)).toEqual(["a", "c"]);
   });
 
+  it("deletes a conversation by threadKey and records it in deletedKeys", () => {
+    const s = apply([received("a", 1, "+15550100001"), received("b", 2, "+15550100002")]);
+    expect(s.order).toEqual(["b", "a"]);
+    const deleted = phoneReducer(s, { type: "deleteConversation", threadKey: "+15550100001" });
+    expect(deleted.order).toEqual(["b"]);
+    expect(deleted.byId.a).toBeUndefined();
+    expect(deleted.byId.b).toBeDefined();
+    expect(deleted.deletedKeys).toContain("+15550100001");
+  });
+
   it("reset clears everything", () => {
     expect(phoneReducer(apply([received("a", 1)]), { type: "reset" })).toEqual(initialPhoneState);
   });

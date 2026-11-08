@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /*
- * Beacon — a lighthouse at night. Deep harbor-blue surfaces, one warm lamp
- * color for Beacon itself, and verdict colors used ONLY for verdicts:
+ * Magenta-Guard — graphite and glass, shared with the landing page. One rose
+ * accent for the product itself, and verdict colors used ONLY for verdicts:
  * red = scam, amber = suspicious, green = safe. No carrier branding.
  */
 @theme {
@@ -10,20 +10,20 @@
     sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
-  --color-harbor-950: #050a14;
-  --color-harbor-900: #08111f;
-  --color-harbor-850: #0c1729;
-  --color-harbor-800: #101d33;
-  --color-harbor-700: #172741;
-  --color-harbor-600: #213555;
-  --color-harbor-500: #34496d;
+  --color-harbor-950: #131417;
+  --color-harbor-900: #1c1b21;
+  --color-harbor-850: #222127;
+  --color-harbor-800: #29272f;
+  --color-harbor-700: #35313c;
+  --color-harbor-600: #48414f;
+  --color-harbor-500: #62576b;
 
-  --color-ink: #f3f6fb;
-  --color-ink-2: #b4c0d4;
-  --color-ink-3: #7d8ca6;
+  --color-ink: #f4f2f5;
+  --color-ink-2: #c6becb;
+  --color-ink-3: #a69bab;
 
-  --color-lamp: #ffc861;
-  --color-lamp-deep: #e9a23b;
+  --color-lamp: #d99ac7;
+  --color-lamp-deep: #ba78a8;
 
   --color-scam: #ff5a52;
   --color-warn: #ffa53a;
@@ -126,3 +126,4 @@
 .ring-pulse {
   animation: ring-pulse 1.6s ease-out infinite;
 }
+

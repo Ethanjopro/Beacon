@@ -4,17 +4,25 @@ import { DemoConsole, isTyping } from "./components/DemoConsole";
 import { PhoneFrame } from "./components/PhoneFrame";
 import { StoryRail } from "./components/StoryRail";
 import { TracePanel } from "./components/TracePanel";
-import { isConsoleRoute } from "./lib/mode";
+import { isArchitectureRoute, isConsoleRoute } from "./lib/mode";
+import { ArchitecturePage } from "./screens/ArchitecturePage";
 import { useViewport } from "./lib/useViewport";
 import { PhoneApp } from "./PhoneApp";
 import { latestEvent } from "./state/reducer";
 import { useBeacon } from "./state/store";
+import { LandingPage } from "./screens/LandingPage";
 
 /** Layout shell: stage (phone + judges' panels) or the standalone console route. */
 export function App() {
+  const [demoRoute, setDemoRoute] = useState(() => location.hash === "#/demo");
   const [consoleRoute, setConsoleRoute] = useState(() => isConsoleRoute());
+  const [archRoute, setArchRoute] = useState(() => isArchitectureRoute());
   useEffect(() => {
-    const onHash = () => setConsoleRoute(isConsoleRoute());
+    const onHash = () => {
+      setDemoRoute(location.hash === "#/demo");
+      setConsoleRoute(isConsoleRoute());
+      setArchRoute(isArchitectureRoute());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -26,7 +34,9 @@ export function App() {
       </div>
     );
   }
-  return <Stage />;
+  if (archRoute) return <ArchitecturePage />;
+  if (demoRoute) return <Stage />;
+  return <LandingPage />;
 }
 
 function Stage() {
@@ -101,8 +111,10 @@ function Backdrop() {
       className="pointer-events-none absolute inset-0"
       style={{
         background:
-          "radial-gradient(ellipse 50% 60% at 50% 35%, rgba(255,200,97,0.07), transparent 70%), radial-gradient(ellipse 80% 60% at 50% 110%, rgba(33,53,85,0.55), transparent 70%)",
+          "radial-gradient(ellipse 50% 60% at 50% 35%, rgba(217,154,199,0.10), transparent 70%), radial-gradient(ellipse 80% 60% at 50% 110%, rgba(113,65,99,0.25), transparent 70%)",
       }}
     />
   );
 }
+
+

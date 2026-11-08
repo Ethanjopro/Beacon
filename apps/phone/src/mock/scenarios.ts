@@ -254,7 +254,7 @@ const momGiftCards: MockScenario = {
           channel: "imessage",
           to: "+15550100001",
           question:
-            "Beacon here, checking a text for your daughter: did you just text her from a new number asking for Apple gift cards? Reply yes or no.",
+            "Magenta-Guard here, checking a text for your daughter: did you just text her from a new number asking for Apple gift cards? Reply yes or no.",
           claim: "This text is from Mom",
           sentAt: now,
           timeoutMs: 45_000,
@@ -515,7 +515,7 @@ const grandsonCall: MockScenario = {
           contactName: "Sam",
           channel: "imessage",
           to: "+15550100002",
-          question: "Beacon here, checking a call for your grandma: are you calling her right now asking for bail money? Reply yes or no.",
+          question: "Magenta-Guard here, checking a call for your grandma: are you calling her right now asking for bail money? Reply yes or no.",
           claim: "The caller is Sam",
           sentAt: now,
           timeoutMs: 45_000,

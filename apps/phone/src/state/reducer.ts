@@ -1,6 +1,10 @@
 import type {
+  CallRecap,
+  CallSpeaker,
+  CallStatus,
   IncomingEvent,
   PrivacyReport,
+  ScreeningResult,
   Signal,
   Stage,
   TraceEvent,
@@ -33,15 +37,33 @@ export interface EventView {
   errors: string[];
   /** ISO time of the first trace item we saw — used to time call transcripts. */
   firstAt: string;
+  /** Screened calls: what Magenta-Guard and the caller said, in order. */
+  turns: CallTurnView[];
+  callStatus?: { status: CallStatus; note?: string };
+  /** Screened calls: the final verdict + action. */
+  screening?: ScreeningResult;
+  /** Screened calls: the post-call "what gave it away" recap (arrives after the verdict). */
+  recap?: CallRecap;
 }
+
+export interface CallTurnView {
+  seq: number;
+  speaker: CallSpeaker;
+  text: string;
+  at: string;
+}
+
+/** True once the call screener has touched this call (vs. a scripted transcript replay). */
+export const isScreenedCall = (view: EventView) => Boolean(view.callStatus || view.turns.length || view.screening);
 
 export interface PhoneState {
   byId: Record<string, EventView>;
   /** Event ids, newest first. */
   order: string[];
+  deletedKeys?: string[];
 }
 
-export type PhoneAction = { type: "trace"; event: TraceEvent } | { type: "reset" };
+export type PhoneAction = { type: "trace"; event: TraceEvent } | { type: "reset" } | { type: "deleteConversation"; threadKey: string };
 
 export const initialPhoneState: PhoneState = { byId: {}, order: [] };
 
@@ -49,13 +71,30 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
   switch (action.type) {
     case "reset":
       return initialPhoneState;
+    case "deleteConversation": {
+      const target = action.threadKey;
+      const idsToRemove = new Set<string>();
+      for (const id of state.order) {
+        const view = state.byId[id];
+        if (view?.event && (threadKeyOf(view.event) === target || view.event.from.handle === target)) {
+          idsToRemove.add(id);
+        }
+      }
+      const nextById = { ...state.byId };
+      for (const id of idsToRemove) {
+        delete nextById[id];
+      }
+      const nextOrder = state.order.filter((id) => !idsToRemove.has(id));
+      const nextDeleted = [...(state.deletedKeys ?? []).filter((k) => k !== target), target];
+      return { byId: nextById, order: nextOrder, deletedKeys: nextDeleted };
+    }
     case "trace":
       return applyTrace(state, action.event);
   }
 }
 
 function emptyView(ev: TraceEvent): EventView {
-  return { eventId: ev.eventId, trace: [], stages: {}, signals: [], errors: [], firstAt: ev.at };
+  return { eventId: ev.eventId, trace: [], stages: {}, signals: [], errors: [], firstAt: ev.at, turns: [] };
 }
 
 function applyTrace(state: PhoneState, ev: TraceEvent): PhoneState {
@@ -64,7 +103,13 @@ function applyTrace(state: PhoneState, ev: TraceEvent): PhoneState {
 
   const view = foldTrace(prev ?? emptyView(ev), ev);
   const order = prev ? state.order : [ev.eventId, ...state.order];
-  return { byId: { ...state.byId, [ev.eventId]: view }, order };
+  let nextDeleted = state.deletedKeys;
+  if (ev.type === "event.received" && ev.event && state.deletedKeys?.length) {
+    const threadKey = threadKeyOf(ev.event);
+    const handle = ev.event.from.handle;
+    nextDeleted = state.deletedKeys.filter((k) => k !== threadKey && k !== handle);
+  }
+  return { byId: { ...state.byId, [ev.eventId]: view }, order, ...(nextDeleted ? { deletedKeys: nextDeleted } : {}) };
 }
 
 function insertBySeq(trace: TraceEvent[], ev: TraceEvent): TraceEvent[] {
@@ -108,6 +153,19 @@ function foldTrace(view: EventView, ev: TraceEvent): EventView {
       break;
     case "error":
       next.errors = [...view.errors, ev.message];
+      break;
+    case "call.turn":
+      next.turns = [...view.turns, { seq: ev.seq, speaker: ev.speaker, text: ev.text, at: ev.at }];
+      break;
+    case "call.status":
+      next.callStatus = { status: ev.status, ...(ev.note ? { note: ev.note } : {}) };
+      break;
+    case "call.verdict":
+      next.screening = ev.result;
+      next.activeStage = undefined;
+      break;
+    case "call.recap":
+      next.recap = ev.recap;
       break;
     case "thought":
     case "tool":
