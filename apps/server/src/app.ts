@@ -355,7 +355,15 @@ export function createApp(options: CreateAppOptions = {}) {
         unsub();
         const greeting = trace.text;
         try {
-          await dialManager.placeOutboundCall(callId, normalizedTarget, greeting);
+          const conversationId = await dialManager.placeOutboundCall(callId, normalizedTarget, greeting);
+          if (conversationId) {
+            void dialManager.watchCall(conversationId, (reason) => {
+              log(`[dial] ${callId}: the call didn't connect (${reason})`);
+              bus.emit(callId, { type: "error", message: `The phone call didn't connect: ${reason}` });
+              sessions.close(callId); // the screener stops listening and reports "no caller speech"
+              dialManager.clearActive(callId);
+            });
+          }
         } catch (err) {
           log(`[dial] outbound call placement failed: ${err instanceof Error ? err.message : String(err)}`);
           bus.emit(callId, { type: "error", message: "Failed to place outbound phone call" });

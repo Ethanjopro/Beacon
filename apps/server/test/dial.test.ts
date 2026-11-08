@@ -371,3 +371,23 @@ describe("custom LLM: POST /v1/elevenlabs-llm/chat/completions", () => {
     expect(ctx.dialManager.hasActive()).toBe(false);
   });
 });
+
+describe("DialManager.watchCall", () => {
+  it("reports a call the SIP trunk refused, with the reason and no digits", async () => {
+    const fakeFetch = (async () =>
+      new Response(JSON.stringify({ status: "failed", metadata: { error: { reason: "dial failed with 403 Forbidden (SIP 403) to +15550100002" } } }), { status: 200 })) as typeof fetch;
+    const dm = new DialManager({ apiKey: "k", fetch: fakeFetch, log: () => {} });
+    let reason = "";
+    await dm.watchCall("conv_1", (r) => (reason = r), { intervalMs: 5, maxMs: 500 });
+    expect(reason).toContain("SIP 403");
+    expect(reason).not.toContain("0100002");
+  });
+
+  it("stops watching once the call is live", async () => {
+    const fakeFetch = (async () => new Response(JSON.stringify({ status: "in-progress" }), { status: 200 })) as typeof fetch;
+    const dm = new DialManager({ apiKey: "k", fetch: fakeFetch, log: () => {} });
+    let failed = false;
+    await dm.watchCall("conv_2", () => (failed = true), { intervalMs: 5, maxMs: 500 });
+    expect(failed).toBe(false);
+  });
+});

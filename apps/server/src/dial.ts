@@ -79,7 +79,8 @@ export class DialManager {
     }
   }
 
-  async placeOutboundCall(callId: string, realNumber: string, greeting: string): Promise<void> {
+  /** Starts the call; resolves to ElevenLabs' conversation id (used to watch whether it connects). */
+  async placeOutboundCall(callId: string, realNumber: string, greeting: string): Promise<string | undefined> {
     const apiKey = this.options.apiKey?.trim();
     const agentId = this.options.agentId?.trim();
     const phoneNumberId = this.options.phoneNumberId?.trim();
@@ -116,11 +117,45 @@ export class DialManager {
     });
 
     if (!res.ok) {
-      const errText = await res.text().catch(() => "");
+      const errText = maskDigits(await res.text().catch(() => ""));
       throw new Error(`ElevenLabs outbound dial call failed: ${res.status} ${errText}`.trim());
     }
+    const data = (await res.json().catch(() => ({}))) as { conversation_id?: unknown; success?: unknown };
     this.log(`outbound dial call placed for ${callId}`);
+    return typeof data.conversation_id === "string" ? data.conversation_id : undefined;
   }
+
+  /**
+   * ElevenLabs accepts the request first and dials afterwards, so a refused call (e.g. the SIP trunk
+   * answering 403) only shows up in the conversation's status. Poll until the call is live or ends;
+   * report a failure with ElevenLabs' reason (digits masked). Gives up quietly after `maxMs`.
+   */
+  async watchCall(conversationId: string, onFailed: (reason: string) => void, opts: { intervalMs?: number; maxMs?: number } = {}): Promise<void> {
+    const apiKey = this.options.apiKey?.trim();
+    if (!apiKey) return;
+    const deadline = Date.now() + (opts.maxMs ?? 60_000);
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, opts.intervalMs ?? 2_000));
+      try {
+        const res = await this.fetchFn(`https://api.elevenlabs.io/v1/convai/conversations/${encodeURIComponent(conversationId)}`, { headers: { "xi-api-key": apiKey } });
+        if (!res.ok) continue;
+        const d = (await res.json().catch(() => ({}))) as { status?: string; metadata?: { error?: { reason?: string }; termination_reason?: string; phone_call?: { call_result?: string } } };
+        if (d.status === "failed") {
+          const why = d.metadata?.error?.reason || d.metadata?.termination_reason || d.metadata?.phone_call?.call_result || "unknown reason";
+          onFailed(maskDigits(String(why)).slice(0, 160));
+          return;
+        }
+        if (d.status === "in-progress" || d.status === "processing" || d.status === "done") return; // connected
+      } catch {
+        // transient: keep watching
+      }
+    }
+  }
+}
+
+/** Phone-number-like digit runs never reach a log or the UI. */
+function maskDigits(text: string): string {
+  return text.replace(/\+?\d[\d\s().-]{6,}\d/g, "[number]");
 }
 
 export function sseContentChunk(content: string, id = `chatcmpl-${randomBytes(8).toString("hex")}`): string {
