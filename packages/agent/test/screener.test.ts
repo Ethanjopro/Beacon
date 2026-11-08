@@ -159,6 +159,18 @@ describe("call screener (Nemotron-driven)", () => {
     expect(first.tool_choice).toBe("required");
   });
 
+  it("shows the subscriber names, never the model's CONTACT_n references", async () => {
+    const nemotron = fakeFetch([
+      tool("t1", "lookup_trusted_contact", { claim: "grandson" }),
+      json({ say: "I can't connect this call.", action: "end", risk: 90, note: "CONTACT_2 claim failed.", signals: [], verdict: { verdict: "SCAM", confidence: 90, evidence: ["Claims to be [CONTACT_2 (family)] from [PHONE_1]."], next_action: "Call CONTACT_2 on the saved number." } }),
+    ]);
+    const { d, trace } = deps(["Grandma it's me, Sam, I need bail."]);
+    const result = await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
+    expect(result.verdict.evidence[0]).toBe("Claims to be Sam from a number.");
+    expect(result.verdict.next_action).toBe("Call Sam on the saved number.");
+    expect(JSON.stringify(trace)).not.toMatch(/CONTACT_\d/);
+  });
+
   it("forces a decision when the caller goes silent", async () => {
     const nemotron = fakeFetch([
       json({ say: null, action: "end", risk: 55, signals: [], verdict: { verdict: "SUSPICIOUS", confidence: 60, evidence: ["The caller never said who they are."], next_action: "Sent to voicemail." } }),

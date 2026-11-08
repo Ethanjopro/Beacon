@@ -93,7 +93,10 @@ export async function runScreenerTool(ctx: ScreenCtx, name: string, args: Record
 
 function lookupTrusted(ctx: ScreenCtx, claim: string): unknown {
   const name = "lookup_trusted_contact";
-  ctx.emit({ type: "tool", name, status: "called", summary: `Who is "${claim.slice(0, 40)}"?` });
+  ctx.emit({ type: "tool", name, status: "called", summary: /contact_\d+/i.test(claim)
+      ? `Looking up the claimed contact (Nemotron only sees "${claim.slice(0, 20)}", never a name or number)`
+      : `Who is "${claim.slice(0, 40)}"?`,
+  });
   const found = lookupContact(claim, ctx.contacts, ctx.call.from.handle);
   const contact = found ? resolveRef(ctx, found.ref) : undefined;
   if (!found || !contact) {

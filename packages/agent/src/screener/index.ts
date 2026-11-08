@@ -24,6 +24,7 @@ import { extractJson } from "../llm/schema.js";
 import { PrivacyLedger } from "../privacy/ledger.js";
 import { LLM_WEIGHT_CAP } from "../pipeline/score.js";
 import { contactBySender } from "../tools/contacts.js";
+import { shortName } from "../privacy/redact.js";
 import { addSignal, hear, resolveRef, setStatus, slug, speak, type ScreenCtx, type ScreenerOptions } from "./context.js";
 import { SCREENER_SYSTEM_PROMPT, buildScreenerUserPrompt } from "./prompts.js";
 import { ScreenerTurnOutput, type ModelVerdict } from "./schema.js";
@@ -243,15 +244,29 @@ function tryParse(content: string): ScreenerTurnOutput | undefined {
   }
 }
 
+/**
+ * Nemotron only ever sees CONTACT_n references. Text shown to the SUBSCRIBER (notes, evidence) gets the
+ * contact's name back; text spoken to the CALLER goes through speakable() instead, which never names anyone.
+ */
+function forSubscriber(ctx: ScreenCtx, text: string): string {
+  return text
+    .replace(/\[?CONTACT_(\d+)(?: \([a-z]+\))?\]?/gi, (m, n: string) => {
+      const c = ctx.contacts[Number(n) - 1];
+      return c ? shortName(c) : m;
+    })
+    .replace(/\[(?:PHONE|EMAIL|CODE|CARD|SSN|ADDRESS)_\d+\]/g, "a number")
+    .replace(/\[SAFE_WORD\]/g, "a code word");
+}
+
 /** Fold the model's turn into the call: claim, new evidence, running risk, activity note. */
 function applyTurn(ctx: ScreenCtx, out: ScreenerTurnOutput): void {
   if (!ctx.claimed && out.claimed_contact) ctx.claimed = resolveRef(ctx, out.claimed_contact);
   for (const s of out.signals) {
     const weight = Math.max(-LLM_WEIGHT_CAP, Math.min(LLM_WEIGHT_CAP, s.weight));
-    addSignal(ctx, { id: `llm_${slug(s.id)}`, title: s.title, detail: s.detail || "Nemotron's judgment.", weight, source: "llm" });
+    addSignal(ctx, { id: `llm_${slug(s.id)}`, title: forSubscriber(ctx, s.title), detail: forSubscriber(ctx, s.detail) || "Nemotron's judgment.", weight, source: "llm" });
   }
   if (out.risk !== undefined) ctx.emit({ type: "score", pScam: out.risk / 100 });
-  if (out.note) ctx.emit({ type: "thought", text: out.note });
+  if (out.note) ctx.emit({ type: "thought", text: forSubscriber(ctx, out.note) });
 }
 
 /**
@@ -283,7 +298,8 @@ export function applyGate(v: ModelVerdict, checks: ScreeningChecks): { verdict: 
 }
 
 function finalize(ctx: ScreenCtx, out: ScreenerTurnOutput, started: number): ScreeningResult {
-  const gated = applyGate(out.verdict!, ctx.checks);
+  const v = out.verdict!;
+  const gated = applyGate({ ...v, evidence: v.evidence.map((e) => forSubscriber(ctx, e)), next_action: forSubscriber(ctx, v.next_action) }, ctx.checks);
   // The model's closing line only fits its own decision; if the gate overrode it, say nothing rather than "connecting you now".
   if (!gated.gateNote && out.say) speak(ctx, out.say);
   const statusNote = { bridge: "Connecting the caller to the subscriber", block: "Call blocked", voicemail: "Sent to voicemail. The subscriber gets a summary." }[gated.action];
