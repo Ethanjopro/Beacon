@@ -15,7 +15,7 @@ import type {
   VerificationRequest,
 } from "@beacon/shared";
 import { PrivacyLedger } from "../privacy/ledger.js";
-import { redact, scrubSafeWords, type RedactionResult } from "../privacy/redact.js";
+import { redact, scrubSafeWords, shortName, type RedactionResult } from "../privacy/redact.js";
 
 export interface ScreenerOptions {
   /** Used in the spoken greeting ("you've reached Rosa's phone"). Optional. */
@@ -28,6 +28,8 @@ export interface ScreenerOptions {
   llmTimeoutMs?: number;
   /** Nemotron's hidden reasoning. Off by default: ~0.7 s per turn instead of 10–20 s, same JSON. */
   thinking?: boolean;
+  /** After the verdict, ask Nemotron for the "what gave it away" recap + practice drill. Default true. */
+  recap?: boolean;
   /** HTTP client for Nemotron (tests inject a fake). Defaults to global fetch. */
   fetch?: typeof fetch;
 }
@@ -122,3 +124,18 @@ export const slug = (s: string) =>
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .slice(0, 48) || "signal";
+
+/**
+ * Nemotron only ever sees CONTACT_n references. Text shown to the SUBSCRIBER (notes, evidence, recap)
+ * gets the contact's name back; text spoken to the CALLER goes through speakable() instead, which never
+ * names anyone.
+ */
+export function forSubscriber(ctx: ScreenCtx, text: string): string {
+  return text
+    .replace(/\[?CONTACT_(\d+)(?: \([a-z]+\))?\]?/gi, (m, n: string) => {
+      const c = ctx.contacts[Number(n) - 1];
+      return c ? shortName(c) : m;
+    })
+    .replace(/\[(?:PHONE|EMAIL|CODE|CARD|SSN|ADDRESS)_\d+\]/g, "a number")
+    .replace(/\[SAFE_WORD\]/g, "a code word");
+}

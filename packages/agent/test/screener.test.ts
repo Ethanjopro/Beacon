@@ -171,6 +171,47 @@ describe("call screener (Nemotron-driven)", () => {
     expect(JSON.stringify(trace)).not.toMatch(/CONTACT_\d/);
   });
 
+  it("writes the post-call recap after the verdict, with names for the subscriber", async () => {
+    const recap = {
+      headline: "Someone pretending to be CONTACT_2 asked for bail money.",
+      tells: [
+        { sign: "Couldn't give the code word", lesson: "Real family won't mind a code word." },
+        { sign: "Wanted gift cards", lesson: "Nobody takes bail in gift cards." },
+      ],
+      takeaway: "Hang up and call back on the number you saved.",
+      drill: { scenario: "Hi, it's your nephew, my car broke down…", question: "What should you do?", options: ["Send money", "Call him back on his saved number", "Give your bank PIN"], answerIndex: 1, explanation: "Calling back on a saved number reaches the real person." },
+    };
+    const nemotron = fakeFetch([
+      tool("t1", "scan_risk_patterns", {}),
+      json({ say: "I can't connect this call.", action: "end", risk: 95, signals: [], verdict: { verdict: "SCAM", confidence: 95, evidence: ["Gift cards for bail."], next_action: "Blocked." } }),
+      json(recap),
+    ]);
+    const { d, trace } = deps(["Grandma it's me, I need bail in gift cards, don't tell Mom."]);
+    await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
+    for (let i = 0; i < 50 && !trace.some((t) => t.type === "call.recap"); i++) await new Promise((r) => setTimeout(r, 10));
+    const got = trace.find((t): t is Extract<TraceBody, { type: "call.recap" }> => t.type === "call.recap")?.recap;
+    expect(got?.headline).toBe("Someone pretending to be Sam asked for bail money.");
+    expect(got?.tells).toHaveLength(2);
+    expect(got?.drill?.answerIndex).toBe(1);
+    // The recap comes after the verdict and its prompt is redacted too.
+    expect(trace.findIndex((t) => t.type === "call.recap")).toBeGreaterThan(trace.findIndex((t) => t.type === "call.verdict"));
+    expect(nemotron.bodies[2]).not.toContain("0104417");
+  });
+
+  it("keeps the recap but drops a broken drill", async () => {
+    const nemotron = fakeFetch([
+      tool("t1", "scan_risk_patterns", {}),
+      json({ say: null, action: "end", risk: 80, signals: [], verdict: { verdict: "SCAM", confidence: 88, evidence: ["Threats."], next_action: "Blocked." } }),
+      json({ headline: "A fake officer threatened arrest.", tells: [{ sign: "Threatened arrest", lesson: "Police don't collect fines by phone." }], takeaway: "Hang up.", drill: { scenario: "x", options: ["only one"], answerIndex: 5 } }),
+    ]);
+    const { d, trace } = deps(["Pay the fine now or you'll be arrested."]);
+    await createScreener(d, NVIDIA, { fetch: nemotron.impl }).screen(call());
+    for (let i = 0; i < 50 && !trace.some((t) => t.type === "call.recap"); i++) await new Promise((r) => setTimeout(r, 10));
+    const got = trace.find((t): t is Extract<TraceBody, { type: "call.recap" }> => t.type === "call.recap")?.recap;
+    expect(got?.takeaway).toBe("Hang up.");
+    expect(got?.drill).toBeUndefined();
+  });
+
   it("forces a decision when the caller goes silent", async () => {
     const nemotron = fakeFetch([
       json({ say: null, action: "end", risk: 55, signals: [], verdict: { verdict: "SUSPICIOUS", confidence: 60, evidence: ["The caller never said who they are."], next_action: "Sent to voicemail." } }),

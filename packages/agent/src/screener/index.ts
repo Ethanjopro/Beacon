@@ -24,8 +24,8 @@ import { extractJson } from "../llm/schema.js";
 import { PrivacyLedger } from "../privacy/ledger.js";
 import { LLM_WEIGHT_CAP } from "../pipeline/score.js";
 import { contactBySender } from "../tools/contacts.js";
-import { shortName } from "../privacy/redact.js";
-import { addSignal, hear, resolveRef, setStatus, slug, speak, type ScreenCtx, type ScreenerOptions } from "./context.js";
+import { addSignal, forSubscriber, hear, resolveRef, setStatus, slug, speak, type ScreenCtx, type ScreenerOptions } from "./context.js";
+import { writeRecap } from "./recap.js";
 import { SCREENER_SYSTEM_PROMPT, buildScreenerUserPrompt } from "./prompts.js";
 import { ScreenerTurnOutput, type ModelVerdict } from "./schema.js";
 import { SCREENER_TOOLS, runScreenerTool } from "./tools.js";
@@ -44,6 +44,7 @@ export function createScreener(deps: ScreenerDeps, overrides: Partial<AgentConfi
     listenTimeoutMs: options.listenTimeoutMs ?? DEFAULTS.listenTimeoutMs,
     llmTimeoutMs: options.llmTimeoutMs ?? DEFAULTS.llmTimeoutMs,
     thinking: options.thinking ?? false,
+    recap: options.recap ?? true,
     fetch: options.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args)),
     ...(options.subscriberName ? { subscriberName: options.subscriberName } : {}),
   };
@@ -244,20 +245,6 @@ function tryParse(content: string): ScreenerTurnOutput | undefined {
   }
 }
 
-/**
- * Nemotron only ever sees CONTACT_n references. Text shown to the SUBSCRIBER (notes, evidence) gets the
- * contact's name back; text spoken to the CALLER goes through speakable() instead, which never names anyone.
- */
-function forSubscriber(ctx: ScreenCtx, text: string): string {
-  return text
-    .replace(/\[?CONTACT_(\d+)(?: \([a-z]+\))?\]?/gi, (m, n: string) => {
-      const c = ctx.contacts[Number(n) - 1];
-      return c ? shortName(c) : m;
-    })
-    .replace(/\[(?:PHONE|EMAIL|CODE|CARD|SSN|ADDRESS)_\d+\]/g, "a number")
-    .replace(/\[SAFE_WORD\]/g, "a code word");
-}
-
 /** Fold the model's turn into the call: claim, new evidence, running risk, activity note. */
 function applyTurn(ctx: ScreenCtx, out: ScreenerTurnOutput): void {
   if (!ctx.claimed && out.claimed_contact) ctx.claimed = resolveRef(ctx, out.claimed_contact);
@@ -345,5 +332,8 @@ function errorResult(ctx: ScreenCtx, err: unknown, started: number): ScreeningRe
 function emitResult(ctx: ScreenCtx, result: ScreeningResult): ScreeningResult {
   ctx.emit({ type: "privacy", report: ctx.privacy.report() });
   ctx.emit({ type: "call.verdict", result });
+  // The recap is written AFTER the verdict, in the background: it never delays the decision,
+  // and a model hiccup only means no recap. Error states (model unreachable) get none.
+  if (result.decidedBy === "nemotron" && ctx.options.recap) void writeRecap(ctx, result);
   return result;
 }
