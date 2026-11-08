@@ -29,10 +29,10 @@ export function InteractivePhone() {
 
   const photonViews = state.order
     .map((id) => state.byId[id])
-    .filter((view) => view?.event?.source === "photon");
+    .filter((view) => view?.event?.source === "photon" || (view?.event?.kind !== "call" && view?.event?.kind !== "voicemail" && view?.event?.from?.handle));
   const latestPhoton = photonViews[0];
   const activePhoton = (activePhotonId ? state.byId[activePhotonId] : undefined) ?? latestPhoton;
-  const photonName = activePhoton?.event?.from.displayName ?? activePhoton?.event?.from.handle ?? "Photon sender";
+  const photonName = activePhoton?.event?.from.displayName ?? activePhoton?.event?.from.handle ?? "Photon Live";
 
   useEffect(() => {
     if (!arrival) return;
@@ -222,13 +222,51 @@ export function InteractivePhone() {
               <div className="mg-imessage-title"><h2>Messages</h2><span className={`mg-photon-status ${status === "live" ? "is-live" : ""}`}><i />{status === "live" ? "PHOTON LIVE" : "CONNECTING"}</span></div>
               <div className="mg-imessage-search">Search</div>
               <div className="mg-imessage-list">
-                {latestPhoton && (
-                  <button onClick={() => { setActivePhotonId(latestPhoton.eventId); setMessageThread("photon"); }}>
-                    <span className="mg-avatar mg-avatar-photon">P</span>
-                    <div><strong>{latestPhoton.event?.from.displayName ?? latestPhoton.event?.from.handle}</strong><p>{latestPhoton.turns.at(-1)?.text ?? "Incoming Photon message"}</p></div>
-                    <time>Live</time><ChevronRight size={12} />
-                  </button>
-                )}
+                <button
+                  className="mg-photon-inbox-btn"
+                  data-testid="demo-scam-text"
+                  onClick={async () => {
+                    // A synthetic scam text delivered through the same pipeline as a real Photon text; Nemotron screens it live.
+                    if (!backend.startCall) return;
+                    const { callId } = await backend.startCall({
+                      from: { handle: `+1555010${String(1000 + Math.floor(Math.random() * 9000))}`, displayName: "Demo scam text" },
+                      source: "photon",
+                      firstWords: "Hi, it's Sam! I lost my phone, this is my new number. I'm in trouble and need $400 in gift cards right now. Please don't tell Mom.",
+                    });
+                    setActivePhotonId(callId);
+                    setMessageThread("photon");
+                  }}
+                >
+                  <span className="mg-avatar mg-avatar-photon">!</span>
+                  <div>
+                    <strong>Send a demo scam text</strong>
+                    <p>Synthetic scam message, screened live by Nemotron</p>
+                  </div>
+                  <time>Demo</time>
+                  <ChevronRight size={12} />
+                </button>
+                <button
+                  onClick={() => {
+                    if (latestPhoton) setActivePhotonId(latestPhoton.eventId);
+                    setMessageThread("photon");
+                  }}
+                  className="mg-photon-inbox-btn"
+                >
+                  <span className="mg-avatar mg-avatar-photon">P</span>
+                  <div>
+                    <strong style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      {latestPhoton ? (latestPhoton.event?.from.displayName ?? latestPhoton.event?.from.handle) : "Photon Live Text"}
+                      <span style={{ fontSize: "10px", background: "rgba(226,0,116,0.2)", color: "#ff7ebb", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                        PHOTON
+                      </span>
+                    </strong>
+                    <p>
+                      {latestPhoton?.turns.at(-1)?.text ?? latestPhoton?.event?.body ?? "Live Photon channel · Tap to view incoming texts"}
+                    </p>
+                  </div>
+                  <time>{latestPhoton ? "Live" : "Ready"}</time>
+                  <ChevronRight size={12} />
+                </button>
                 <button onClick={() => setMessageThread("mom")}><span className="mg-avatar mg-avatar-mom">M</span><div><strong>Mom</strong><p>Yep! Thanks for dinner ❤️</p></div><time>Yesterday</time><ChevronRight size={12} /></button>
                 <button><span className="mg-avatar mg-avatar-jordan">J</span><div><strong>Jordan</strong><p>Running 10 min late, save me a seat</p></div><time>Tue</time><ChevronRight size={12} /></button>
                 <button><span className="mg-avatar mg-avatar-pharmacy">O</span><div><strong>Oakridge Pharmacy</strong><p>Your prescription is ready.</p></div><time>Mon</time><ChevronRight size={12} /></button>
@@ -246,7 +284,45 @@ export function InteractivePhone() {
                   {activePhoton?.turns.map((turn) => (
                     <p key={turn.seq} className={turn.speaker === "caller" ? "from-them" : "from-me"}>{turn.text}</p>
                   ))}
-                  {!activePhoton?.turns.length && <p className="mg-photon-waiting">Waiting for a text to the protected Photon number…</p>}
+                  {(!activePhoton?.turns.length && !activePhoton?.event?.body) ? (
+                    <div style={{ textAlign: "center", padding: "24px 12px" }}>
+                      <p className="mg-photon-waiting" style={{ marginBottom: "14px", fontSize: "13px" }}>Waiting for a text to the protected Photon number…</p>
+                      <button
+                        type="button"
+                        style={{
+                          background: "rgba(226, 0, 116, 0.15)",
+                          border: "1px solid rgba(226, 0, 116, 0.4)",
+                          color: "#ff7ebb",
+                          padding: "8px 16px",
+                          borderRadius: "18px",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                        onClick={async () => {
+                          try {
+                            const res = await fetch("/api/calls", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                from: { handle: "+15550104417", displayName: "Urgent Security Alert" },
+                                source: "photon",
+                                firstWords: "Urgent: Suspicious activity on your account. Send your verification code now to prevent permanent suspension.",
+                              }),
+                            });
+                            if (res.ok) {
+                              const data = await res.json();
+                              if (data.callId) setActivePhotonId(data.callId);
+                            }
+                          } catch (err) {
+                            console.error("Failed to fire simulated Photon attack:", err);
+                          }
+                        }}
+                      >
+                        ⚡ Simulate Incoming Photon Scam (Nemotron Intercept)
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               )}
               <div className="mg-message-compose"><span>＋</span><div>iMessage</div><span>↑</span></div>
