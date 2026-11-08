@@ -104,6 +104,7 @@ export class LlmClient {
   }
 }
 
+/** May be async: the screener's callback tool waits for a real person to answer. */
 export type ToolExecutor = (name: string, args: Record<string, unknown>) => unknown;
 
 /**
@@ -130,7 +131,7 @@ export async function runToolLoop(
       } catch {
         // Malformed tool arguments: run with none; the tool reports what's missing.
       }
-      const result = execute(call.function.name, args);
+      const result = await execute(call.function.name, args);
       messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
     }
   }

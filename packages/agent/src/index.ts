@@ -24,6 +24,8 @@ export { interpretReply, classifyReplyText } from "./pipeline/verify.js";
 /** For hosts: scrub safe words from anything they trace themselves (e.g. `event.received`). */
 export { scrubSafeWords } from "./privacy/redact.js";
 export type { AgentInternals } from "./pipeline/context.js";
+/** Magenta-Guard call screener (Nemotron only, no offline brain). */
+export { createScreener, applyGate, codeWordMatches, type ScreenerOptions } from "./screener/index.js";
 
 const DEFAULT_LLM_TIMEOUT_MS = 12_000;
 const THREAD_MEMORY = { messagesPerThread: 5, threads: 200 };
