@@ -75,6 +75,9 @@ export type NewCall = z.input<typeof NewCall>;
 export const CreatedCall = z.object({ callId: z.string() });
 export type CreatedCall = z.infer<typeof CreatedCall>;
 
+export const DialCall = z.object({ number: z.string().min(7).max(32), displayName: z.string().max(40).optional() });
+export type DialCall = z.infer<typeof DialCall>;
+
 /** POST /api/calls/:id/say — the caller says something (sim script, judge typing, or live STT). */
 export const CallerSays = z.object({ text: z.string().min(1).max(2000) });
 export type CallerSays = z.infer<typeof CallerSays>;

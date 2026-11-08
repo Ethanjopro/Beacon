@@ -23,6 +23,7 @@ export const API = {
   reset: "/api/reset", // POST → { ok: true } (demo only: clears events/trace)
   // ── Call screening (Magenta-Guard) ──
   calls: "/api/calls", // POST NewCall → CreatedCall; the screener answers, results stream as call.* traces
+  callsDial: "/api/calls/dial", // POST DialCall → CreatedCall
   callSay: (id: string) => `/api/calls/${encodeURIComponent(id)}/say`, // POST CallerSays → { ok: true }
   trusted: "/api/trusted", // GET ?claim=<name or role> → TrustedRecord[]; POST NewTrustedContact → TrustedRecord
   trustedByNumber: (number: string) => `/api/trusted/${encodeURIComponent(number)}`, // GET → TrustedRecord | 404
