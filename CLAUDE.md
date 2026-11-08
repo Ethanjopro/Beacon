@@ -7,6 +7,10 @@
 The rules above apply to you in full. These notes only cover how to work
 efficiently with Claude Code in this repo.
 
+- **Slash commands** (in `.claude/commands/`): `/onboard`, `/next`, `/ship`. Each one runs the
+  matching protocol in AGENTS.md. A teammate saying "onboard me", "what's next?" or "ship it"
+  in plain words means the same thing.
+
 - **Scope yourself to one lane per session.** Start by reading the lane's
   `AGENTS.md` (e.g. `@packages/agent/AGENTS.md`). If the task spans lanes, say so
   and propose splitting it — don't silently edit across lanes.

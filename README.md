@@ -11,16 +11,30 @@ it, a privacy ledger of what left your phone, and a recovery checklist.
 
 Built at HackUTD 2026 for the T-Mobile track.
 
+## 👋 Teammates: start here
+
+```bash
+git clone https://github.com/Ethanjopro/Beacon && cd Beacon
+node scripts/setup.mjs
+```
+
+Then **open your AI coding agent in this folder and say "onboard me"**
+(Claude Code: `/onboard`). It figures out your role, checks your setup, briefs you on
+your part of the project and starts your first task. Later, say **"what's next?"**
+(`/next`) to pick up work and **"ship it"** (`/ship`) to open a PR.
+
+Nothing installed? On GitHub: **Code → Codespaces → Create codespace**. Everything
+sets itself up in the browser. Role guides: [docs/onboarding/](docs/onboarding/README.md).
+
 ## Quickstart
 
 ```bash
-pnpm install
 pnpm dev                                   # server :8787 + phone UI :5173
 pnpm scenario mom-new-number-giftcards     # in another terminal
 ```
 
 Open http://localhost:5173. No API keys are needed: it runs in mock mode by
-default. Copy `.env.example` to `.env` to use real Nemotron and iMessage.
+default. `.env` (created by setup) holds keys for real Nemotron and iMessage.
 
 ## Repo
 

@@ -1,0 +1,15 @@
+{
+  "name": "Beacon",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "npm install -g pnpm@10.28.0 && node scripts/setup.mjs",
+  "forwardPorts": [5173, 8787],
+  "portsAttributes": {
+    "5173": { "label": "Beacon phone UI", "onAutoForward": "openBrowser" },
+    "8787": { "label": "Beacon server", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["bradlc.vscode-tailwindcss", "vitest.explorer", "EditorConfig.EditorConfig"]
+    }
+  }
+}

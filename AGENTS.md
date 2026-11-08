@@ -6,6 +6,42 @@
 > has its own `AGENTS.md` with lane-specific scope and backlog — read the one for
 > the directory you're working in **before** editing it.
 
+## Onboarding a teammate ("onboard me", "I'm new", "where do I start?", `/onboard`)
+
+Teammates are told only: "open your agent in the repo and say *onboard me*". You do the rest:
+
+1. **Who are they?** If they didn't say, ask one question: *SWE 1 (agent brain), SWE 2
+   (phone app), CENG 1 (server + Photon channels) or CENG 2 (scenarios + eval)?* Check the
+   roster below first. If their `git config user.name` / email is already listed, confirm instead of asking.
+2. **Setup.** Run `node scripts/setup.mjs --check`. If something's missing, run
+   `node scripts/setup.mjs` (installs deps, creates `.env`), with their OK. Fix or explain
+   anything still red.
+3. **Brief them in ≤ 8 lines**, from `docs/onboarding/<role>.md` + their lane's `AGENTS.md`:
+   what they own, what already works (the lane's "Status"), what keys/accounts *they*
+   need and where to get them, their next checkpoint, and the next unchecked **Must** item.
+4. **Show it running**: tell them to run `pnpm dev`, open http://localhost:5173, and run
+   `pnpm scenario mom-new-number-giftcards`. If you can run commands, start it for them.
+5. **First PR**: offer to add their GitHub handle to the roster below and to
+   `.github/CODEOWNERS` for their lane. A tiny PR that teaches the flow.
+6. **Offer to start** their next backlog item (→ "What's next?").
+
+## "What's next?" (`/next`)
+
+1. `git fetch origin && git status`. Make sure they're up to date with `main` and have no stray changes.
+2. In their lane's `AGENTS.md`, pick the first unchecked item: **Must** before **Should** before
+   **Stretch**. Skip anything already on an open branch/PR (`git branch -r`) or listed under "Status" as in progress.
+3. Say which item you're taking and the plan in 3 bullets, then create the branch
+   `<lane>/<short-topic>` from `origin/main` and do it, with tests, staying inside the lane.
+4. Finish with "Ship it" if they agree.
+
+## "Ship it" (`/ship`)
+
+1. `pnpm check` must pass. Fix failures in your own lane, and report failures in other lanes, don't fix them.
+2. Tick the backlog item and update "Status" in the lane's `AGENTS.md`.
+3. Commit with a conventional prefix (`feat(agent): …`), push the branch, and open a PR to
+   `main` that fills in `.github/PULL_REQUEST_TEMPLATE.md`. Never push straight to `main`.
+4. Give them the PR link and say who should review it (CODEOWNERS).
+
 ## What we're building
 
 **Beacon — scam detection tells you it's *probably* fake. Beacon *finds out*.**
@@ -46,7 +82,9 @@ Team roster (fill in): Lead = `@Ethanjopro` · SWE 1 = `__` · SWE 2 = `__` · C
 ## Commands
 
 ```bash
-pnpm install          # once (Node 22, pnpm 10 — see .nvmrc / packageManager)
+node scripts/setup.mjs          # first time: checks Node/pnpm, installs, creates .env, runs checks
+node scripts/setup.mjs --check  # any time: is my machine OK?
+pnpm install          # (setup does this) Node 22, pnpm 10 — see .nvmrc / packageManager
 pnpm dev              # server :8787 + phone :5173 — open http://localhost:5173
 pnpm scenarios        # list scripted attacks
 pnpm scenario <id>    # fire one at the running server
