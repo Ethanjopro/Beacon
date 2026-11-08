@@ -1,119 +1,90 @@
-import { ArrowDown, ArrowLeft, ArrowRight, Lock } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, BrainCircuit, Check, DatabaseZap, Lock, Radio, ShieldCheck, Smartphone } from "lucide-react";
 import { motion } from "motion/react";
+import { useEffect } from "react";
+import { MagentaGuardLogo } from "../components/MagentaGuardLogo";
 import { ARCH, callPhase, type ArchBox } from "../lib/architecture";
 import { latestEvent } from "../state/reducer";
 import { useBeacon } from "../state/store";
-import { BeaconMark } from "../components/BeaconMark";
+import "./architecture.css";
 
-/**
- * #/architecture — the system diagram for judges, live: the box the current
- * call is in lights up as the trace streams in.
- */
+const BOX_ICONS = { ingest: Radio, bus: DatabaseZap, orchestrator: BrainCircuit, challenge: ShieldCheck, handset: Smartphone } as const;
+
+/** A live, judge-friendly view of the real call-screening path. */
 export function ArchitecturePage() {
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
   const { state } = useBeacon();
   const view = latestEvent(state);
   const phase = view?.event?.kind === "call" ? callPhase(view) : -1;
-  const lastNote = [...(view?.trace ?? [])]
-    .reverse()
-    .find((t) => t.type === "thought" || t.type === "call.status" || (t.type === "tool" && t.status === "result"));
-  const now =
-    lastNote?.type === "thought" ? lastNote.text : lastNote?.type === "tool" ? `${lastNote.name}: ${lastNote.summary}` : lastNote?.type === "call.status" ? lastNote.note : undefined;
+  const lastNote = [...(view?.trace ?? [])].reverse().find((t) => t.type === "thought" || t.type === "call.status" || (t.type === "tool" && t.status === "result"));
+  const now = lastNote?.type === "thought" ? lastNote.text : lastNote?.type === "tool" ? `${lastNote.name}: ${lastNote.summary}` : lastNote?.type === "call.status" ? lastNote.note : undefined;
 
   return (
-    <div className="scroll-quiet h-dvh overflow-y-auto bg-harbor-950" data-testid="architecture-page">
-      <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-8 sm:py-8">
-        <header className="flex flex-wrap items-center gap-3">
-          <a href="#/" className="inline-flex items-center gap-1.5 rounded-xl bg-harbor-800 px-3 py-2 text-sm font-semibold text-ink-2">
-            <ArrowLeft size={15} /> Phone
-          </a>
-          <BeaconMark size={30} className="text-ink" />
-          <h1 className="text-[24px] font-bold tracking-tight sm:text-[28px]">Magenta-Guard architecture</h1>
-        </header>
-        <p className="mt-3 max-w-3xl text-[16px] leading-relaxed text-ink-2">
-          Every call is answered by the agent first. The subscriber's phone only rings for callers who pass an identity challenge.
-          {phase >= 0 ? " The highlighted box is where the latest call is right now." : " Place a call from the demo console (D) and watch it move through."}
-        </p>
+    <div className="mg-tech-page scroll-quiet" data-testid="architecture-page">
+      <div className="mg-tech-aurora" aria-hidden="true" />
+      <header className="mg-tech-nav">
+        <a className="mg-tech-brand" href="#/"><MagentaGuardLogo size={27} /><span>Magenta<span>–Guard</span></span></a>
+        <nav aria-label="Technology navigation"><a href="#how-it-works">How it works</a><a className="active" href="#/architecture">Technology</a></nav>
+        <a className="mg-tech-back" href="#/"><ArrowLeft size={14} /> Back to demo</a>
+      </header>
 
-        <div className="mt-8 flex flex-col items-stretch gap-2 lg:flex-row">
-          {ARCH.map((box, i) => (
-            <div key={box.id} className="flex flex-col items-center gap-2 lg:flex-1 lg:flex-row">
-              <Box box={box} active={phase === i} done={phase > i} />
-              {i < ARCH.length - 1 && (
-                <>
-                  <ArrowDown size={20} className="shrink-0 text-ink-3 lg:hidden" />
-                  <ArrowRight size={20} className="hidden shrink-0 text-ink-3 lg:block" />
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+      <main className="mg-tech-main">
+        <section className="mg-tech-hero">
+          <div>
+            <p className="mg-tech-kicker"><i /> THE TRUST PATH</p>
+            <h1>Every hello,<br /><span>accounted for.</span></h1>
+            <p className="mg-tech-lede">One call moves through five visible checks. The model can reason, but it cannot bypass the identity gate.</p>
+          </div>
+          <div className="mg-tech-proof" aria-label="System guarantees">
+            <article><BrainCircuit size={18} /><span><strong>Real reasoning</strong><small>Nemotron tool loop</small></span><Check size={13} /></article>
+            <article><Lock size={18} /><span><strong>Private by default</strong><small>No stored audio</small></span><Check size={13} /></article>
+            <article><ShieldCheck size={18} /><span><strong>Identity before access</strong><small>Hard bridge gate</small></span><Check size={13} /></article>
+          </div>
+        </section>
 
-        {now && (
-          <p className="mt-5 rounded-2xl bg-harbor-900 px-4 py-3 text-[14px] text-ink-2" data-testid="arch-now">
-            <span className="font-semibold text-lamp">Right now: </span>
-            {now}
-          </p>
-        )}
+        <section className="mg-tech-flow" aria-labelledby="flow-title">
+          <header><div><p>LIVE SYSTEM MAP</p><h2 id="flow-title">From ring to resolution.</h2></div><span className={phase >= 0 ? "is-live" : ""}><i />{phase >= 0 ? "CALL IN MOTION" : "READY FOR A CALL"}</span></header>
+          <div className="mg-tech-boxes">
+            {ARCH.map((box, i) => <div key={box.id} className="mg-tech-box-wrap"><Box box={box} index={i} active={phase === i} done={phase > i} />{i < ARCH.length - 1 && <div className="mg-tech-connector"><ArrowDown className="mobile" size={17} /><ArrowRight className="desktop" size={17} /></div>}</div>)}
+          </div>
+          {now && <motion.p className="mg-tech-now" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} data-testid="arch-now"><span><i /> RIGHT NOW</span>{now}</motion.p>}
+        </section>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <section className="rounded-3xl border border-harbor-700 bg-harbor-900/70 p-5">
-            <h2 className="text-[17px] font-bold">One call, in order</h2>
-            <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-[15px] leading-snug text-ink-2">
-              <li>A call arrives (Photon webhook or sim injection) and is normalized into one call event.</li>
-              <li>Magenta-Guard answers before the phone rings and says it's an AI.</li>
-              <li>Nemotron interviews the caller and calls tools: who they claim to be, known scam tactics.</li>
-              <li>It challenges the claim: the family code word (checked on the server) and a callback to the real contact's saved number.</li>
-              <li>It returns a structured verdict: VERIFIED, SUSPICIOUS or SCAM, with confidence and plain-language reasons.</li>
-              <li>A bridge gate connects the call only if a challenge passed. Otherwise it's blocked or sent to voicemail.</li>
+        <div className="mg-tech-details">
+          <section>
+            <p className="mg-tech-section-label">THE CALL, IN PLAIN ENGLISH</p>
+            <h2>Fast enough to feel invisible.<br /><span>Strict enough to matter.</span></h2>
+            <ol>
+              <li><b>01</b><div><strong>Answer before the ring</strong><p>A signed Photon event becomes one normalized call. Magenta-Guard discloses that it is an AI.</p></div></li>
+              <li><b>02</b><div><strong>Challenge the story</strong><p>Nemotron interviews the caller, checks risk patterns, then requests a code word or saved-number callback.</p></div></li>
+              <li><b>03</b><div><strong>Gate the connection</strong><p>A structured verdict explains the decision. No passed challenge means no bridge—regardless of what the model says.</p></div></li>
             </ol>
           </section>
-          <section className="rounded-3xl border border-harbor-700 bg-harbor-900/70 p-5">
-            <h2 className="flex items-center gap-2 text-[17px] font-bold">
-              <Lock size={16} className="text-lamp" /> Privacy by design
-            </h2>
-            <ul className="mt-3 flex flex-col gap-2 text-[15px] leading-snug text-ink-2">
-              <li>Call audio is processed live and never stored. Transcripts live in memory only for the length of the call.</li>
-              <li>Code words, saved numbers and the caller's number never reach the model: Nemotron sees redacted text only.</li>
-              <li>Callbacks go only to the number already saved for the contact, never to a number the caller gives.</li>
-              <li>Customer data and the carrier network are simulated; nothing here is real customer data.</li>
+          <section className="mg-tech-privacy">
+            <div className="mg-tech-privacy-icon"><Lock size={22} /></div>
+            <p className="mg-tech-section-label">PRIVACY, BUILT INTO THE PATH</p>
+            <h2>The safest data<br />is data we never keep.</h2>
+            <ul>
+              <li><Check size={13} /> Audio processed live, never stored</li>
+              <li><Check size={13} /> Code words stay outside the model</li>
+              <li><Check size={13} /> Saved numbers are redacted from traces</li>
+              <li><Check size={13} /> Callbacks use registry numbers only</li>
             </ul>
+            <p className="mg-tech-disclosure">Concept demo · synthetic customer data and simulated carrier network</p>
           </section>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
 
-const REAL_STYLE: Record<ArchBox["real"], string> = {
-  real: "bg-safe/15 text-safe",
-  simulated: "bg-harbor-700 text-ink-2",
-  mixed: "bg-warn/15 text-warn",
-};
-const REAL_TEXT: Record<ArchBox["real"], string> = { real: "Real", simulated: "Simulated", mixed: "Sim + real" };
+const REAL_TEXT: Record<ArchBox["real"], string> = { real: "REAL", simulated: "SIMULATED", mixed: "SIM + REAL" };
 
-function Box({ box, active, done }: { box: ArchBox; active: boolean; done: boolean }) {
-  return (
-    <motion.div
-      animate={{ scale: active ? 1.03 : 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 24 }}
-      className="flex w-full flex-1 flex-col rounded-3xl border p-4"
-      style={{
-        borderColor: active ? "var(--color-lamp)" : done ? "color-mix(in srgb, var(--color-lamp) 35%, transparent)" : "var(--color-harbor-700)",
-        background: active ? "color-mix(in srgb, var(--color-lamp) 12%, var(--color-harbor-900))" : "var(--color-harbor-900)",
-        boxShadow: active ? "0 0 36px -8px rgba(255,200,97,0.55)" : "none",
-      }}
-      data-testid={`arch-${box.id}`}
-      data-active={active || undefined}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="text-[16px] font-bold leading-tight">{box.title}</h3>
-        {active && <span className="mt-1 size-2.5 shrink-0 animate-pulse rounded-full bg-lamp" aria-label="active now" />}
-      </div>
-      <p className="mt-1 text-[13px] font-semibold text-ink-2">{box.subtitle}</p>
-      <p className="mt-3 flex-1 text-[13px] leading-snug text-ink-3">{box.code}</p>
-      <span className={`mt-3 self-start rounded-full px-2.5 py-1 text-[11px] font-bold ${REAL_STYLE[box.real]}`} title={box.realNote}>
-        {REAL_TEXT[box.real]}
-      </span>
-    </motion.div>
-  );
+function Box({ box, index, active, done }: { box: ArchBox; index: number; active: boolean; done: boolean }) {
+  const Icon = BOX_ICONS[box.id];
+  return <motion.article className={`mg-tech-box ${active ? "active" : ""} ${done ? "done" : ""}`} animate={{ y: active ? -5 : 0 }} transition={{ type: "spring", stiffness: 300, damping: 24 }} data-testid={`arch-${box.id}`} data-active={active || undefined}>
+    <div className="mg-tech-box-top"><span>0{index + 1}</span><Icon size={18} />{active && <i aria-label="active now" />}</div>
+    <h3>{box.title}</h3><strong>{box.subtitle}</strong><p>{box.code}</p><small className={`tone-${box.real}`} title={box.realNote}>{REAL_TEXT[box.real]}</small>
+  </motion.article>;
 }

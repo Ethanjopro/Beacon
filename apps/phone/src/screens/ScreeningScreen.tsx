@@ -8,6 +8,7 @@ import { contactForHandle, formatHandle, LABEL_COLOR, LABEL_TEXT } from "../lib/
 import type { EventView } from "../state/reducer";
 import { useBeacon } from "../state/store";
 import { RecapCard } from "../components/RecapCard";
+import { useReadableTurns, VoiceDictatedText } from "../lib/useReadableTurns";
 
 /**
  * A call Magenta-Guard answered first. The subscriber watches the screen
@@ -19,21 +20,45 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
   const scroller = useRef<HTMLDivElement>(null);
   const ev = view.event;
   const result = view.screening;
+  const visibleTurns = useReadableTurns(view.eventId, view.turns);
+  const transcriptCaughtUp = visibleTurns.length >= view.turns.length;
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [view.turns.length, Boolean(result), Boolean(view.recap), Boolean(view.verification?.request), Boolean(view.verification?.outcome)]);
+  }, [visibleTurns.length, Boolean(result), Boolean(view.recap), Boolean(view.verification?.request), Boolean(view.verification?.outcome)]);
 
   if (!ev) return null;
   const saved = contactForHandle(contacts, ev.from.handle);
   const claimed = ev.from.displayName && ev.from.displayName !== "Unknown" ? ev.from.displayName : undefined;
   const claimedContact = claimed ? contacts.find((c) => c.name.toLowerCase().startsWith(claimed.toLowerCase())) : undefined;
   const name = saved?.name ?? claimed ?? formatHandle(ev.from.handle);
-  const p = view.pScam;
-  const tint = result ? VERDICT_COLOR[result.verdict.verdict] : p === undefined ? "var(--color-harbor-700)" : LABEL_COLOR[labelFor(p)];
+  const turnsTotal = view.turns.length || 1;
+  const turnProgress = Math.min(1, visibleTurns.length / turnsTotal);
+  const maxSignalsToShow = Math.max(1, Math.ceil(turnProgress * view.signals.length));
+  const activeSignals = view.signals.slice(0, maxSignalsToShow);
+  const rawP = view.pScam;
+  const p = rawP !== undefined
+    ? transcriptCaughtUp
+      ? rawP
+      : visibleTurns.length <= 1
+        ? Math.min(0.18, rawP)
+        : visibleTurns.length <= 2
+          ? Math.min(0.48, rawP)
+          : visibleTurns.length <= 3
+            ? Math.min(0.76, rawP)
+            : rawP
+    : undefined;
+  const tint = result && transcriptCaughtUp ? VERDICT_COLOR[result.verdict.verdict] : p === undefined ? "var(--color-harbor-700)" : LABEL_COLOR[labelFor(p)];
   const status = view.callStatus?.status ?? "ringing";
   const live = !result;
-  const risky = view.signals.filter((s) => s.weight > 0).slice(-3).reverse();
+  const risky = activeSignals.filter((s) => s.weight > 0).slice(-3).reverse();
+
+  const handleEndCall = () => {
+    if (ev?.id) {
+      fetch(`/api/calls/${encodeURIComponent(ev.id)}/end`, { method: "POST" }).catch(() => {});
+    }
+    onDone();
+  };
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden" data-testid="screening-screen">
@@ -83,22 +108,28 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
       >
         <div className="flex flex-col gap-2">
           <AnimatePresence initial={false}>
-            {view.turns.map((t) => (
-              <motion.div
-                key={t.seq}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`max-w-[86%] rounded-2xl px-3.5 py-2 text-[15px] leading-snug ${
-                  t.speaker === "caller" ? "self-start rounded-bl-md bg-harbor-700/90 text-ink" : "self-end rounded-br-md bg-lamp/90 text-harbor-900"
-                }`}
-              >
-                <span className={`mb-0.5 flex items-center gap-1 text-[11px] font-semibold ${t.speaker === "caller" ? "text-ink-3" : "text-harbor-800"}`}>
-                  {t.speaker === "agent" && <Bot size={12} aria-hidden />}
-                  {t.speaker === "caller" ? name : "Magenta-Guard (AI)"}
-                </span>
-                {t.speaker === "caller" ? hideCodeWord(t.text) : t.text}
-              </motion.div>
-            ))}
+            {visibleTurns.map((t, idx) => {
+              const isLatest = idx === visibleTurns.length - 1 && !transcriptCaughtUp;
+              return (
+                <motion.div
+                  key={t.seq}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`max-w-[86%] rounded-2xl px-3.5 py-2 text-[15px] leading-snug ${
+                    t.speaker === "caller" ? "self-start rounded-bl-md bg-harbor-700/90 text-ink" : "self-end rounded-br-md bg-lamp/90 text-harbor-900"
+                  }`}
+                >
+                  <span className={`mb-0.5 flex items-center gap-1 text-[11px] font-semibold ${t.speaker === "caller" ? "text-ink-3" : "text-harbor-800"}`}>
+                    {t.speaker === "agent" && <Bot size={12} aria-hidden />}
+                    {t.speaker === "caller" ? name : "Magenta-Guard (AI)"}
+                  </span>
+                  <VoiceDictatedText
+                    text={t.text.replace(/\[SAFE_WORD\]/g, "••••••••")}
+                    isLatest={isLatest}
+                  />
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
 
           {view.verification?.request && (
@@ -107,15 +138,15 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
             </motion.div>
           )}
 
-          {live && view.turns.length > 0 && <ListeningDots status={status} />}
+          {live && visibleTurns.length > 0 && <ListeningDots status={status} />}
 
-          <AnimatePresence>{result && <ScreeningVerdictCard key="verdict" result={result} />}</AnimatePresence>
-          {result?.decidedBy === "nemotron" && (view.recap ? <RecapCard recap={view.recap} /> : <p className="py-2 text-center text-xs text-ink-3">Writing your 30-second recap…</p>)}
+          <AnimatePresence>{result && transcriptCaughtUp && <ScreeningVerdictCard key="verdict" result={result} />}</AnimatePresence>
+          {result?.decidedBy === "nemotron" && transcriptCaughtUp && (view.recap ? <RecapCard recap={view.recap} /> : <p className="py-2 text-center text-xs text-ink-3">Writing your 30-second recap…</p>)}
         </div>
       </div>
 
       <div className="relative px-6 pb-8 pt-3">
-        {result ? (
+        {result && transcriptCaughtUp ? (
           <button type="button" onClick={onDone} className="w-full rounded-2xl bg-harbor-700 py-3.5 text-[16px] font-semibold text-ink" data-testid="screening-done">
             Done
           </button>
@@ -124,7 +155,7 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
             <p className="text-[13px] leading-snug text-ink-3">Magenta-Guard is handling this call. You don't need to do anything.</p>
             <button
               type="button"
-              onClick={onDone}
+              onClick={handleEndCall}
               className="grid size-14 shrink-0 place-items-center rounded-full bg-scam text-white shadow-[0_8px_30px_-6px_rgba(255,90,82,0.8)]"
               aria-label="End call"
             >

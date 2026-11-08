@@ -60,9 +60,10 @@ export interface PhoneState {
   byId: Record<string, EventView>;
   /** Event ids, newest first. */
   order: string[];
+  deletedKeys?: string[];
 }
 
-export type PhoneAction = { type: "trace"; event: TraceEvent } | { type: "reset" };
+export type PhoneAction = { type: "trace"; event: TraceEvent } | { type: "reset" } | { type: "deleteConversation"; threadKey: string };
 
 export const initialPhoneState: PhoneState = { byId: {}, order: [] };
 
@@ -70,6 +71,23 @@ export function phoneReducer(state: PhoneState, action: PhoneAction): PhoneState
   switch (action.type) {
     case "reset":
       return initialPhoneState;
+    case "deleteConversation": {
+      const target = action.threadKey;
+      const idsToRemove = new Set<string>();
+      for (const id of state.order) {
+        const view = state.byId[id];
+        if (view?.event && (threadKeyOf(view.event) === target || view.event.from.handle === target)) {
+          idsToRemove.add(id);
+        }
+      }
+      const nextById = { ...state.byId };
+      for (const id of idsToRemove) {
+        delete nextById[id];
+      }
+      const nextOrder = state.order.filter((id) => !idsToRemove.has(id));
+      const nextDeleted = [...(state.deletedKeys ?? []).filter((k) => k !== target), target];
+      return { byId: nextById, order: nextOrder, deletedKeys: nextDeleted };
+    }
     case "trace":
       return applyTrace(state, action.event);
   }
@@ -85,7 +103,13 @@ function applyTrace(state: PhoneState, ev: TraceEvent): PhoneState {
 
   const view = foldTrace(prev ?? emptyView(ev), ev);
   const order = prev ? state.order : [ev.eventId, ...state.order];
-  return { byId: { ...state.byId, [ev.eventId]: view }, order };
+  let nextDeleted = state.deletedKeys;
+  if (ev.type === "event.received" && ev.event && state.deletedKeys?.length) {
+    const threadKey = threadKeyOf(ev.event);
+    const handle = ev.event.from.handle;
+    nextDeleted = state.deletedKeys.filter((k) => k !== threadKey && k !== handle);
+  }
+  return { byId: { ...state.byId, [ev.eventId]: view }, order, ...(nextDeleted ? { deletedKeys: nextDeleted } : {}) };
 }
 
 function insertBySeq(trace: TraceEvent[], ev: TraceEvent): TraceEvent[] {

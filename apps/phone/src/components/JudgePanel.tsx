@@ -10,9 +10,14 @@ import { useBeacon } from "../state/store";
  */
 
 const EXAMPLES = [
-  "Hi Grandma, it's Sam. I crashed the car and I'm at the police station, I need $2,000 for bail. Please don't tell Mom.",
-  "This is Officer Daniels with the county sheriff. There's a warrant for your arrest unless you pay a fine today with gift cards.",
-  "Hey it's your bank's fraud team. We blocked a charge, I just need the code we texted you to unlock your card.",
+  { group: "mobile", label: "SIM swap alert", name: "Mobile Security", text: "This is your wireless carrier's security team. We detected a SIM change. Read back the six-digit code we sent so we can cancel it." },
+  { group: "mobile", label: "Number transfer", name: "Account Protection", text: "A transfer of your mobile number is pending. Confirm your account PIN now or your service will be disconnected today." },
+  { group: "mobile", label: "Device upgrade", name: "Wireless Rewards", text: "You qualify for a free phone upgrade. I just need your account PIN and the verification code we texted to reserve it." },
+  { group: "mobile", label: "eSIM activation", name: "eSIM Support", text: "Your eSIM has expired. Share the one-time code from your phone so I can reactivate service before you lose your number." },
+  { group: "other", label: "Fake Medicare", name: "Medicare Support", text: "This is Medicare support. Your coverage will be suspended today unless you confirm your member number and payment details." },
+  { group: "other", label: "Fake IRS", name: "Revenue Officer", text: "This is a federal revenue officer. A warrant will be issued unless you settle the tax balance today using prepaid gift cards." },
+  { group: "other", label: "Bank code theft", name: "Fraud Department", text: "We blocked a charge on your bank card. Read me the one-time code we texted you so I can unlock the account." },
+  { group: "other", label: "Family emergency", name: "Sam", text: "Hi Grandma, it's Sam. I crashed the car and need $2,000 for bail. Please don't tell Mom." },
 ];
 
 export function JudgePanel() {
@@ -82,12 +87,11 @@ export function JudgePanel() {
               data-testid="judge-words"
             />
           </label>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {EXAMPLES.map((e) => (
-              <button key={e} type="button" onClick={() => setWords(e)} className="rounded-full bg-harbor-700 px-2.5 py-1 text-left text-[12px] text-ink-2 hover:text-ink">
-                {e.slice(0, 38)}…
-              </button>
-            ))}
+          <div className="mt-3 rounded-xl border border-harbor-700/80 bg-harbor-900/45 p-2.5">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[.12em] text-lamp">Mobile-network attacks</p>
+            <div className="flex flex-wrap gap-1.5">{EXAMPLES.filter((e) => e.group === "mobile").map((e) => <ExampleButton key={e.label} example={e} onPick={() => { setName(e.name); setWords(e.text); }} />)}</div>
+            <p className="mb-2 mt-3 text-[10px] font-bold uppercase tracking-[.12em] text-ink-3">Other common scams</p>
+            <div className="flex flex-wrap gap-1.5">{EXAMPLES.filter((e) => e.group === "other").map((e) => <ExampleButton key={e.label} example={e} onPick={() => { setName(e.name); setWords(e.text); }} />)}</div>
           </div>
           <button
             type="button"
@@ -140,4 +144,8 @@ export function JudgePanel() {
       {error && <p className="mt-2 text-[13px] text-warn">{error}</p>}
     </div>
   );
+}
+
+function ExampleButton({ example, onPick }: { example: (typeof EXAMPLES)[number]; onPick: () => void }) {
+  return <button type="button" onClick={onPick} title={example.text} className={`rounded-full border px-2.5 py-1 text-left text-[11px] transition-colors ${example.group === "mobile" ? "border-lamp/25 bg-lamp/10 text-lamp hover:bg-lamp/15" : "border-harbor-600 bg-harbor-700 text-ink-2 hover:text-ink"}`}>{example.label}</button>;
 }

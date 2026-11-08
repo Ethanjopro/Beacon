@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, Phone, PhoneOff } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isScreenedCall, threadKeyOf, type EventView } from "./state/reducer";
@@ -23,13 +23,16 @@ type Screen =
 
 const SHEET_DELAY_MS = 900;
 
-export function PhoneApp({ compact, onFocusChange }: { compact: boolean; onFocusChange?: (eventId: string | undefined) => void }) {
+export function PhoneApp({ compact, activeCallId, onFocusChange, onBackToHome }: { compact: boolean; activeCallId?: string; onFocusChange?: (eventId: string | undefined) => void; onBackToHome?: () => void }) {
   const { state, arrival, verdictArrival, simpleMode } = useBeacon();
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [screen, setScreen] = useState<Screen>(activeCallId ? { name: "call", eventId: activeCallId } : { name: "home" });
   const [sheetId, setSheetId] = useState<string>();
   const [toast, setToast] = useState<{ text: string; n: number }>();
   const screenRef = useRef(screen);
   screenRef.current = screen;
+  useEffect(() => {
+    if (activeCallId) setScreen({ name: "call", eventId: activeCallId });
+  }, [activeCallId]);
 
   const showToast = useCallback((text: string) => setToast({ text, n: Date.now() }), []);
   useEffect(() => {
@@ -93,7 +96,39 @@ export function PhoneApp({ compact, onFocusChange }: { compact: boolean; onFocus
             <ThreadScreen threadKey={screen.threadKey} onBack={() => setScreen({ name: "home" })} onOpenVerdict={setSheetId} />
           )}
           {screen.name === "call" && state.byId[screen.eventId] && isScreened(state.byId[screen.eventId]!) && (
-            <ScreeningScreen view={state.byId[screen.eventId]!} onDone={() => setScreen({ name: "home" })} />
+            <ScreeningScreen view={state.byId[screen.eventId]!} onDone={() => { if (onBackToHome) onBackToHome(); else setScreen({ name: "home" }); }} />
+          )}
+          {screen.name === "call" && !state.byId[screen.eventId] && (
+            <div className="flex h-full flex-col items-center justify-between px-6 pb-12 pt-14 text-center bg-harbor-900 text-ink">
+              <div className="flex flex-col items-center">
+                <span className="rounded-full bg-harbor-800 px-3.5 py-1 text-[12px] font-semibold text-lamp animate-pulse">
+                  Connecting to Magenta-Guard…
+                </span>
+                <h1 className="mt-6 text-[26px] font-semibold tracking-tight text-ink">Active Call</h1>
+                <p className="mt-1 text-[13px] text-ink-2">AI Call Screener answering first…</p>
+              </div>
+              <div className="relative size-20 grid place-items-center">
+                <span className="absolute inset-0 rounded-full bg-lamp/20 animate-ping" />
+                <span className="size-16 rounded-full bg-harbor-800 border border-lamp/40 grid place-items-center">
+                  <Phone className="size-7 text-lamp" />
+                </span>
+              </div>
+              <div className="flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (screen.eventId) fetch(`/api/calls/${encodeURIComponent(screen.eventId)}/end`, { method: "POST" }).catch(() => {});
+                    if (onBackToHome) onBackToHome();
+                    else setScreen({ name: "home" });
+                  }}
+                  className="grid size-14 place-items-center rounded-full bg-scam text-white shadow-[0_8px_30px_-6px_rgba(255,90,82,0.8)]"
+                  aria-label="End call"
+                >
+                  <PhoneOff size={24} />
+                </button>
+                <p className="text-[12px] text-ink-3">End call</p>
+              </div>
+            </div>
           )}
           {screen.name === "call" && state.byId[screen.eventId] && !isScreened(state.byId[screen.eventId]!) && (
             <CallScreen

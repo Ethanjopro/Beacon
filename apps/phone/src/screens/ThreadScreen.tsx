@@ -1,4 +1,4 @@
-import { ArrowUp, ChevronLeft, PhoneIncoming, TriangleAlert } from "lucide-react";
+import { ArrowUp, ChevronLeft, PhoneIncoming, Trash2, TriangleAlert } from "lucide-react";
 import { motion } from "motion/react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { VerdictPill } from "../components/Badges";
@@ -19,7 +19,7 @@ export function ThreadScreen({
   onBack: () => void;
   onOpenVerdict: (eventId: string) => void;
 }) {
-  const { state, contacts, simpleMode } = useBeacon();
+  const { state, contacts, simpleMode, deleteConversation } = useBeacon();
   const events = eventsInThread(state, threadKey);
   const latest = events[events.length - 1];
   const handle = latest?.event?.from.handle ?? threadKey;
@@ -48,7 +48,20 @@ export function ThreadScreen({
             </span>
           )}
         </div>
-        <div className="h-[76px]" />
+        <div className="ml-auto flex h-[76px] items-center pr-1">
+          <button
+            type="button"
+            onClick={() => {
+              deleteConversation(threadKey);
+              onBack();
+            }}
+            className="rounded-full p-2 text-ink-3 hover:bg-scam/15 hover:text-scam active:scale-95 transition-all"
+            title="Delete conversation"
+            aria-label="Delete conversation"
+          >
+            <Trash2 size={18} />
+          </button>
+        </div>
       </header>
 
       {latest && (

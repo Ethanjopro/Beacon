@@ -144,3 +144,6 @@ the phone uses a same-origin BroadcastChannel today — a `reset` SSE event woul
 
 - Scroll follow-up: monotonic angle-to-front zoom, fading/sliding side cards, same handset reveals Phone/Screening apps. Mouse keypad and keyboard tel input added. Frontend typecheck passes.
 - ~~REQUEST TO BACKEND: outbound dial endpoint~~ Done: `POST /api/calls/dial` (`API.callsDial`, allowlisted numbers only). The dialer uses it and shows the server's refusal reasons (403 not allowlisted, 409 call already live) under the number.
+- Photon Messages follow-up: the landing-page Messages app now consumes live `source: "photon"` trace events from SSE, auto-opens new Photon conversations, and appends caller/agent turns as iMessage bubbles. Verified with two signed local Photon webhook deliveries; no canned message is used for this path.
+- Presentation follow-up: restyled How it works as a glass trust-path story and rebuilt Technology as a responsive live system map using the landing graphite/rose/lime language. Cross-route anchors and scroll restoration verified at desktop and 390×844.
+- Console/landing polish: renamed ambiguous Fire actions to Run demo, prioritizes carrier/SIM-swap presets, added grouped mobile-network attack prompts, and replaced the clipped landing demo footer with a responsive three-route launchpad.
