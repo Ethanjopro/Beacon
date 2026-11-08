@@ -45,7 +45,7 @@ export function VerdictSheet({
       />
       <motion.section
         role="dialog"
-        aria-label="Beacon verdict"
+        aria-label="Magenta-Guard verdict"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
@@ -78,7 +78,7 @@ export function VerdictSheet({
           )}
 
           {!simple && (
-            <Section title="Why Beacon thinks so">
+            <Section title="Why Magenta-Guard thinks so">
               <ReasonList verdict={v} />
             </Section>
           )}

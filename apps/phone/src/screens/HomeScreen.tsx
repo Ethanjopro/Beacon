@@ -53,7 +53,7 @@ function ProtectionCard({ status, mock, checked, stopped }: { status: string; mo
       <div className="min-w-0 flex-1">
         {down ? (
           <>
-            <p className="text-[17px] font-semibold leading-tight text-warn">Can't reach Beacon</p>
+            <p className="text-[17px] font-semibold leading-tight text-warn">Can't reach Magenta-Guard</p>
             <p className="mt-0.5 text-[13px] leading-snug text-ink-2">
               Retrying. Start it with <span className="font-mono text-ink">pnpm dev</span>, or open{" "}
               <a className="font-semibold text-lamp underline" href="?mock=1">demo mode</a>.
@@ -61,7 +61,7 @@ function ProtectionCard({ status, mock, checked, stopped }: { status: string; mo
           </>
         ) : (
           <>
-            <p className="text-[17px] font-semibold leading-tight">Beacon is protecting this phone</p>
+            <p className="text-[17px] font-semibold leading-tight">Magenta-Guard is protecting this phone</p>
             <p className="tabular mt-0.5 text-[13px] text-ink-2">
               {status === "connecting"
                 ? "Connecting…"

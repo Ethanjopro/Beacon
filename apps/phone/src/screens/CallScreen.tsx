@@ -63,7 +63,7 @@ export function CallScreen({ view, onHangUp }: { view: EventView; onHangUp: () =
       <div className="relative mx-5 mt-4 rounded-2xl bg-harbor-900/70 px-4 py-3 backdrop-blur">
         <div className="mb-1 flex items-center justify-between text-[13px]">
           <span className="flex items-center gap-1.5 font-semibold text-ink-2">
-            <BeaconMark size={16} className="text-ink" /> Beacon is listening
+            <BeaconMark size={16} className="text-ink" /> Magenta-Guard is listening
           </span>
           {p !== undefined && (
             <span className="font-bold" style={{ color: tint }}>

@@ -4,7 +4,8 @@ import { DemoConsole, isTyping } from "./components/DemoConsole";
 import { PhoneFrame } from "./components/PhoneFrame";
 import { StoryRail } from "./components/StoryRail";
 import { TracePanel } from "./components/TracePanel";
-import { isConsoleRoute } from "./lib/mode";
+import { isArchitectureRoute, isConsoleRoute } from "./lib/mode";
+import { ArchitecturePage } from "./screens/ArchitecturePage";
 import { useViewport } from "./lib/useViewport";
 import { PhoneApp } from "./PhoneApp";
 import { latestEvent } from "./state/reducer";
@@ -13,8 +14,12 @@ import { useBeacon } from "./state/store";
 /** Layout shell: stage (phone + judges' panels) or the standalone console route. */
 export function App() {
   const [consoleRoute, setConsoleRoute] = useState(() => isConsoleRoute());
+  const [archRoute, setArchRoute] = useState(() => isArchitectureRoute());
   useEffect(() => {
-    const onHash = () => setConsoleRoute(isConsoleRoute());
+    const onHash = () => {
+      setConsoleRoute(isConsoleRoute());
+      setArchRoute(isArchitectureRoute());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -26,6 +31,7 @@ export function App() {
       </div>
     );
   }
+  if (archRoute) return <ArchitecturePage />;
   return <Stage />;
 }
 

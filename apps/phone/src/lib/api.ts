@@ -39,7 +39,7 @@ async function request<T>(fetchImpl: FetchLike, url: string, schema: z.ZodType<T
       headers: { "content-type": "application/json", ...(init?.headers ?? {}) },
     });
   } catch {
-    throw new ApiError("Can't reach the Beacon server.");
+    throw new ApiError("Can't reach the Magenta-Guard server.");
   }
   if (!res.ok) throw new ApiError(`${init?.method ?? "GET"} ${url} failed (${res.status})`, res.status);
   const parsed = schema.safeParse(await res.json());

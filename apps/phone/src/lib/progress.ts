@@ -39,7 +39,7 @@ export function bannerState(view: EventView, simple = false): BannerState {
   }
 
   if (view.errors.length > 0 && !view.activeStage) {
-    return { tone: "error", title: "Beacon hit a problem", detail: "Treat this message with care until it's checked." };
+    return { tone: "error", title: "Magenta-Guard hit a problem", detail: "Treat this message with care until it's checked." };
   }
 
   switch (view.activeStage) {

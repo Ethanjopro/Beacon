@@ -159,7 +159,7 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
         </div>
         {pending.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-harbor-600 px-4 py-4 text-sm text-ink-3">
-            No one is being asked right now. Fire the "Mom" scenario and Beacon's question will show up here.
+            No one is being asked right now. Fire the "Mom" scenario and Magenta-Guard's question will show up here.
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
