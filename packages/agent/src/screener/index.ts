@@ -173,8 +173,9 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
 
   const needsVerdict = (o: ScreenerTurnOutput) => (turn.mustDecide || o.action === "end") && !o.verdict;
   let out = tryParse(content);
-  if (!out || needsVerdict(out)) {
-    // Fresh request, no tools: some models ignore tool_choice "none" after a long tool loop.
+  let lastParseError = out ? "" : describeParseFailure(content);
+  // Up to two fresh, tool-free repair requests: some models ignore tool_choice "none" after a long tool loop.
+  for (let attempt = 0; attempt < 2 && (!out || needsVerdict(out)); attempt++) {
     const wantVerdict = turn.mustDecide || out?.action === "end";
     const repair = await client.chat({
       model: req.model,
@@ -190,11 +191,25 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
       ],
     });
     out = tryParse(repair.content ?? "");
+    if (!out) lastParseError = describeParseFailure(repair.content ?? "");
   }
-  if (!out || needsVerdict(out)) throw new Error("Nemotron did not return a valid screening decision");
+  if (!out || needsVerdict(out)) throw new Error(`Nemotron did not return a valid screening decision (${out ? "no verdict" : lastParseError})`);
   if (turn.mustDecide) out = { ...out, action: "end" };
   applyTurn(ctx, out);
   return out;
+}
+
+/** Why a reply didn't parse: field paths and issue codes only, never the model's text. */
+function describeParseFailure(content: string): string {
+  if (!content.trim()) return "empty reply";
+  let json: unknown;
+  try {
+    json = extractJson(content);
+  } catch {
+    return "no JSON object in reply";
+  }
+  const parsed = ScreenerTurnOutput.safeParse(json);
+  return parsed.success ? "ok" : parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".") || "(root)"}: ${i.code}`).join("; ");
 }
 
 function tryParse(content: string): ScreenerTurnOutput | undefined {
