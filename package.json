@@ -15,6 +15,7 @@
     "scenario": "pnpm -F @beacon/scenarios fire",
     "scenarios": "pnpm -F @beacon/scenarios list",
     "eval": "pnpm -F @beacon/scenarios eval",
+    "judge": "pnpm -F @beacon/scenarios judge",
     "typecheck": "pnpm -r --parallel typecheck",
     "test": "pnpm -r test",
     "build": "pnpm -F @beacon/phone build",
