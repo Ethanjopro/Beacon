@@ -9,7 +9,8 @@ import { scenarios, scenarioToEvent, trustedContacts } from "../src/index.js";
  * contract between CENG 2 (scenarios) and SWE 1 (agent) — keep it green.
  */
 describe("scenario library × agent", () => {
-  for (const scenario of scenarios) {
+  // "screener" calls are decided live by the Nemotron call screener, not this text pipeline (see eval-calls).
+  for (const scenario of scenarios.filter((s) => !s.tags.includes("screener"))) {
     it(`${scenario.id} → ${scenario.expected.label}`, async () => {
       const trace: TraceBody[] = [];
       const agent = createAgent(
