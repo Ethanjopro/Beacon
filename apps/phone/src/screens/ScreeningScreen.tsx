@@ -7,6 +7,7 @@ import { VerificationCard } from "../components/VerificationCard";
 import { contactForHandle, formatHandle, LABEL_COLOR, LABEL_TEXT } from "../lib/format";
 import type { EventView } from "../state/reducer";
 import { useBeacon } from "../state/store";
+import { RecapCard } from "../components/RecapCard";
 
 /**
  * A call Magenta-Guard answered first. The subscriber watches the screen
@@ -21,7 +22,7 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
-  }, [view.turns.length, Boolean(result), Boolean(view.verification?.request), Boolean(view.verification?.outcome)]);
+  }, [view.turns.length, Boolean(result), Boolean(view.recap), Boolean(view.verification?.request), Boolean(view.verification?.outcome)]);
 
   if (!ev) return null;
   const saved = contactForHandle(contacts, ev.from.handle);
@@ -109,6 +110,7 @@ export function ScreeningScreen({ view, onDone }: { view: EventView; onDone: () 
           {live && view.turns.length > 0 && <ListeningDots status={status} />}
 
           <AnimatePresence>{result && <ScreeningVerdictCard key="verdict" result={result} />}</AnimatePresence>
+          {result?.decidedBy === "nemotron" && (view.recap ? <RecapCard recap={view.recap} /> : <p className="py-2 text-center text-xs text-ink-3">Writing your 30-second recap…</p>)}
         </div>
       </div>
 

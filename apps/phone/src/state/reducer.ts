@@ -1,4 +1,5 @@
 import type {
+  CallRecap,
   CallSpeaker,
   CallStatus,
   IncomingEvent,
@@ -41,6 +42,8 @@ export interface EventView {
   callStatus?: { status: CallStatus; note?: string };
   /** Screened calls: the final verdict + action. */
   screening?: ScreeningResult;
+  /** Screened calls: the post-call "what gave it away" recap (arrives after the verdict). */
+  recap?: CallRecap;
 }
 
 export interface CallTurnView {
@@ -136,6 +139,9 @@ function foldTrace(view: EventView, ev: TraceEvent): EventView {
     case "call.verdict":
       next.screening = ev.result;
       next.activeStage = undefined;
+      break;
+    case "call.recap":
+      next.recap = ev.recap;
       break;
     case "thought":
     case "tool":
