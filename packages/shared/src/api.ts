@@ -3,6 +3,7 @@ import { IncomingEvent } from "./events.js";
 import { TrustedContact } from "./contacts.js";
 import { Verdict } from "./verdict.js";
 import { VerificationOutcome } from "./verification.js";
+import { ScreeningResult } from "./screening.js";
 
 /**
  * HTTP contract of apps/server. The phone UI, apps/channels and the scenario
@@ -20,6 +21,12 @@ export const API = {
   scenarios: "/api/scenarios", // GET  → ScenarioSummary[]
   fireScenario: (id: string) => `/api/scenarios/${encodeURIComponent(id)}/fire`, // POST → { eventId }
   reset: "/api/reset", // POST → { ok: true } (demo only: clears events/trace)
+  // ── Call screening (Magenta-Guard) ──
+  calls: "/api/calls", // POST NewCall → CreatedCall; the screener answers, results stream as call.* traces
+  callSay: (id: string) => `/api/calls/${encodeURIComponent(id)}/say`, // POST CallerSays → { ok: true }
+  trusted: "/api/trusted", // GET ?claim=<name or role> → TrustedRecord[]; POST NewTrustedContact → TrustedRecord
+  trustedByNumber: (number: string) => `/api/trusted/${encodeURIComponent(number)}`, // GET → TrustedRecord | 404
+  trustedCheckCode: (number: string) => `/api/trusted/${encodeURIComponent(number)}/check-code`, // POST CodeWordCheck → CodeWordResult
 } as const;
 
 export const SSE_EVENT_NAME = "trace";
@@ -47,5 +54,7 @@ export const EventDetail = z.object({
   event: IncomingEvent,
   verdict: Verdict.optional(),
   verification: VerificationOutcome.optional(),
+  /** Calls only: the screener's result. */
+  screening: ScreeningResult.optional(),
 });
 export type EventDetail = z.infer<typeof EventDetail>;

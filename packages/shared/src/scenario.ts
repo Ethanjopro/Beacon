@@ -31,6 +31,11 @@ export const Scenario = z.object({
     exposure: IncomingEvent.shape.exposure,
   }),
   /**
+   * Calls only: what the simulated caller says, one line per time the screener
+   * stops to listen. Defaults to the transcript's caller segments.
+   */
+  callerScript: z.array(z.string().min(1)).optional(),
+  /**
    * How the REAL trusted contact answers when Beacon asks, in simulator mode.
    * Omit to simulate no answer (timeout). In live mode a teammate's phone answers.
    */
