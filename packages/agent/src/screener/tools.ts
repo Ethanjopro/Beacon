@@ -193,7 +193,10 @@ async function requestCallback(ctx: ScreenCtx, ref: unknown, rawQuestion: string
     return { error: "look up the claimed contact first" };
   }
   const question = stripUnsafe(rawQuestion).trim().slice(0, 400);
-  if (question.length < 8) return { error: "question required: what should we ask the real contact?" };
+  if (question.length < 8) {
+    ctx.emit({ type: "tool", name, status: "error", summary: "No question for the real contact yet" });
+    return { error: "question required: what should we ask the real contact?" };
+  }
 
   const who = shortName(contact);
   const request: VerificationRequest = {

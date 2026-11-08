@@ -19,7 +19,7 @@ import {
   type ScreeningResult,
   type TraceBody,
 } from "@beacon/shared";
-import { LlmClient, runToolLoop, type ChatMessage } from "../llm/client.js";
+import { LlmClient, LlmError, runToolLoop, type ChatMessage } from "../llm/client.js";
 import { extractJson } from "../llm/schema.js";
 import { PrivacyLedger } from "../privacy/ledger.js";
 import { LLM_WEIGHT_CAP } from "../pipeline/score.js";
@@ -154,21 +154,38 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
       }),
     },
   ];
-  const req = { model: ctx.config.model, messages, tools: SCREENER_TOOLS, maxTokens: 4096, temperature: 0.3 };
-  const loop = await runToolLoop(client, req, (name, args) => runScreenerTool(ctx, name, args), 5);
+  const req = { model: ctx.config.model, messages, tools: SCREENER_TOOLS, maxTokens: 12000, temperature: 0.3 };
+  // Remember this turn's tool results so a repair request can carry them without the tool protocol.
+  const toolLog: string[] = [];
+  const execute = async (name: string, args: Record<string, unknown>) => {
+    const result = await runScreenerTool(ctx, name, args);
+    toolLog.push(`${name}(${JSON.stringify(args)}) -> ${JSON.stringify(result)}`);
+    return result;
+  };
+  let content = "";
+  try {
+    content = (await runToolLoop(client, req, execute, 8)).content;
+  } catch (err) {
+    // A model that keeps calling tools, or answers empty, gets one repair request below. Network errors still throw.
+    if (!(err instanceof LlmError) || !/kept calling tools|empty reply/.test(err.message)) throw err;
+  }
   if (firstCloudCall && ctx.privacy.sentToCloud) ctx.emit({ type: "privacy", report: ctx.privacy.report() });
 
   const needsVerdict = (o: ScreenerTurnOutput) => (turn.mustDecide || o.action === "end") && !o.verdict;
-  let out = tryParse(loop.content);
+  let out = tryParse(content);
   if (!out || needsVerdict(out)) {
+    // Fresh request, no tools: some models ignore tool_choice "none" after a long tool loop.
+    const wantVerdict = turn.mustDecide || out?.action === "end";
     const repair = await client.chat({
-      ...req,
-      toolChoice: "none",
+      model: req.model,
+      maxTokens: req.maxTokens,
+      temperature: req.temperature,
       messages: [
-        ...loop.messages,
+        messages[0]!,
+        messages[1]!,
         {
           role: "user",
-          content: `That was not the required JSON object${turn.mustDecide || out?.action === "end" ? ' with action "end" and a verdict' : ""}. Reply with ONLY the JSON object.`,
+          content: `Tool results so far this turn:\n${toolLog.join("\n") || "(none)"}\n\nDo not call tools. Reply with ONLY the JSON object${wantVerdict ? ' with action "end" and a verdict' : ""}.`,
         },
       ],
     });
