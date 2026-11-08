@@ -25,6 +25,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { ZodType } from "zod";
 import { TraceBus } from "./bus.js";
 import { ElevenLabsPhotonCallback, type CallbackProvider } from "./callback.js";
+import { PhotonSender, parsePhotonEvent, verifyStandardWebhook } from "./photon.js";
 import { CallSessions } from "./calls.js";
 import { applyVerifyOverrides, toPublicContact } from "./contacts.js";
 import {
@@ -73,6 +74,8 @@ export interface CreateAppOptions {
   elevenlabsWebhookSecret?: string;
   /** Outbound phone call provider when request.channel === "call". */
   callbackProvider?: CallbackProvider;
+  /** Sends replies into Photon 2.0 conversations (tests inject a fake). Defaults to PHOTON_PROJECT_ID / PHOTON_API_KEY. */
+  photonSender?: PhotonSender;
   /** Live voice dial manager. */
   dialManager?: DialManager;
   dialOptions?: DialManagerOptions;
@@ -311,6 +314,13 @@ export function createApp(options: CreateAppOptions = {}) {
     if (!sessions.say(c.req.param("id"), text)) return c.json({ error: "No live call with that id" }, 404);
     return c.json({ ok: true });
   });
+  app.post("/api/calls/:id/end", async (c) => {
+    const id = c.req.param("id");
+    sessions.close(id);
+    dialManager.clearActive(id);
+    bus.emit(id, { type: "call.status", status: "blocked", note: "Call ended by user" });
+    return c.json({ ok: true });
+  });
 
   // ── Live Voice Dial: dial friend via ElevenLabs over Photon SIP trunk ──
   app.post(API.callsDial, async (c) => {
@@ -544,32 +554,58 @@ export function createApp(options: CreateAppOptions = {}) {
   app.post("/v1/elevenlabs-llm", handleCustomLlm);
 
   // ── Photon webhook listener ──
+  const photonSender =
+    options.photonSender ?? new PhotonSender({ projectId: options.env?.PHOTON_PROJECT_ID, apiKey: options.env?.PHOTON_API_KEY, log });
+  const seenWebhookIds = new Set<string>();
+
+  /** Sends every Magenta-Guard line of this conversation back to the texter over Photon. */
+  function relayToPhoton(callId: string, to: { spaceId: string; senderId?: string; parentMessageId?: string }): void {
+    let n = 0;
+    const unsub = bus.subscribe((t) => {
+      if (t.eventId !== callId) return;
+      if (t.type === "call.turn" && t.speaker === "agent") void photonSender.sendText(to, t.text, `${callId}:${++n}`);
+      if (t.type === "call.verdict") unsub();
+    });
+  }
+
   app.post("/webhooks/photon", async (c) => {
+    const secret = options.photonWebhookSecret ?? options.env?.PHOTON_WEBHOOK_SECRET ?? "";
+    const nowSec = Math.floor(clock().getTime() / 1000);
+    const standard = {
+      id: c.req.header("webhook-id"),
+      timestamp: c.req.header("webhook-timestamp"),
+      signature: c.req.header("webhook-signature"),
+    };
     const sigHeader = c.req.header("X-Spectrum-Signature") ?? c.req.header("x-spectrum-signature");
     const tsHeader = c.req.header("X-Spectrum-Timestamp") ?? c.req.header("x-spectrum-timestamp");
 
-    if (!sigHeader || !tsHeader) {
+    if (!standard.signature && (!sigHeader || !tsHeader)) {
       return c.json({ error: "Missing signature headers" }, 400);
     }
-
-    const tsNum = Number(tsHeader);
-    if (Number.isNaN(tsNum)) {
-      return c.json({ error: "Invalid timestamp header" }, 400);
-    }
-
-    const nowSec = Math.floor(clock().getTime() / 1000);
-    if (Math.abs(nowSec - tsNum) > 300) {
-      return c.json({ error: "Stale timestamp" }, 401);
-    }
-
-    const secret = options.photonWebhookSecret ?? options.env?.PHOTON_WEBHOOK_SECRET ?? "";
     if (!secret) {
       return c.json({ error: "Webhook secret not configured" }, 401);
     }
-
     const rawBody = await c.req.text();
-    if (!verifySpectrumSignature(rawBody, sigHeader, tsHeader, secret)) {
-      return c.json({ error: "Invalid signature" }, 401);
+
+    if (standard.signature) {
+      // Photon 2.0 (Standard Webhooks). Their docs say: reject with 400.
+      if (!verifyStandardWebhook(rawBody, standard, secret, nowSec)) {
+        log("photon webhook rejected: bad Standard Webhooks signature (check PHOTON_WEBHOOK_SECRET is this destination's whsec_ secret)");
+        return c.json({ error: "Invalid signature" }, 400);
+      }
+      if (standard.id) {
+        if (seenWebhookIds.has(standard.id)) return c.body(null, 204); // a retry we already handled
+        seenWebhookIds.add(standard.id);
+        if (seenWebhookIds.size > 1000) seenWebhookIds.delete(seenWebhookIds.values().next().value!);
+      }
+    } else {
+      // Photon Spectrum (stable): X-Spectrum-Signature over "v0:<ts>:<body>".
+      const tsNum = Number(tsHeader);
+      if (Number.isNaN(tsNum)) return c.json({ error: "Invalid timestamp header" }, 400);
+      if (Math.abs(nowSec - tsNum) > 300) return c.json({ error: "Stale timestamp" }, 401);
+      if (!verifySpectrumSignature(rawBody, sigHeader!, tsHeader!, secret)) {
+        return c.json({ error: "Invalid signature" }, 401);
+      }
     }
 
     let json: unknown;
@@ -577,6 +613,36 @@ export function createApp(options: CreateAppOptions = {}) {
       json = JSON.parse(rawBody);
     } catch {
       return c.json({ error: "Body must be valid JSON" }, 400);
+    }
+
+    // Photon 2.0 message events: screen the texter, and text Magenta-Guard's lines back.
+    const parsed = parsePhotonEvent(json);
+    if (parsed.kind === "ignore") {
+      log(`photon webhook ignored: ${parsed.reason}`);
+      return c.body(null, 204);
+    }
+    if (parsed.kind === "text") {
+      const live = sessions.findByHandle(parsed.handle);
+      if (live) {
+        sessions.say(live, parsed.text);
+        return c.json({ ok: true, callId: live, routed: "say" }, 202);
+      }
+      const callId = newEventId();
+      // Subscribe BEFORE the screener starts: it speaks its AI disclosure immediately.
+      relayToPhoton(callId, { spaceId: parsed.spaceId, senderId: parsed.lineUserId, parentMessageId: parsed.messageId });
+      ingestCall({
+        event: {
+          id: callId,
+          kind: "call",
+          source: "photon",
+          from: { handle: parsed.handle, ...(parsed.displayName ? { displayName: parsed.displayName } : {}) },
+          body: "",
+          threadId: `call_${parsed.handle}`,
+        },
+        firstWords: parsed.text,
+      });
+      log(`photon ${parsed.platform ?? "text"} from a new sender -> screening ${callId}`);
+      return c.json({ ok: true, callId }, 202);
     }
 
     let normalized: NormalizedCall;
