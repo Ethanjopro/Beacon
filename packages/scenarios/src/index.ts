@@ -6,7 +6,7 @@
 import type { NewEvent, Scenario, ScenarioSummary } from "@beacon/shared";
 import { scenarios } from "./library.js";
 
-export { scenarios } from "./library.js";
+export { scenarios, demoScenarios } from "./library.js";
 export { trustedContacts } from "./contacts.js";
 
 export function listScenarios(): ScenarioSummary[] {
@@ -21,7 +21,8 @@ export function getScenario(id: string): Scenario | undefined {
 export function scenarioToEvent(scenario: Scenario): NewEvent {
   return {
     ...scenario.event,
-    source: "scenario",
+    // Forwarded scenarios mimic a user forwarding a message to Beacon's line.
+    source: scenario.tags.includes("forwarded") ? "forwarded" : "scenario",
     scenarioId: scenario.id,
     threadId: `thread_${scenario.event.from.handle}`,
   };

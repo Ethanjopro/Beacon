@@ -13,7 +13,7 @@ export const API = {
   health: "/api/health", // GET  → HealthResponse
   events: "/api/events", // POST NewEvent → { eventId }
   event: (id: string) => `/api/events/${encodeURIComponent(id)}`, // GET → EventDetail
-  stream: "/api/stream", // GET  SSE; `event: trace`, `data: TraceEvent`; `?since=<seq>` replays
+  stream: "/api/stream", // GET  SSE; `event: trace`, `id: <seq>`, `data: TraceEvent`. `seq` starts at 1; `?since=<seq>` is EXCLUSIVE (replays seq > since), so `?since=0` replays everything buffered
   contacts: "/api/contacts", // GET  → PublicContact[] (safe words stripped)
   pendingVerifications: "/api/verifications/pending", // GET → VerificationRequest[]
   verificationReply: (id: string) => `/api/verifications/${encodeURIComponent(id)}/reply`, // POST ReplyBody → VerificationOutcome

@@ -1,0 +1,9 @@
+{
+  "format": "csv",
+  "file": "messages.csv",
+  "text": "message",
+  "label": "is_scam",
+  "positiveLabel": "1",
+  "type": "category",
+  "baselinePrediction": "baseline_pred"
+}

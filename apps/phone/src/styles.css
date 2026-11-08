@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/*
+ * Beacon — a lighthouse at night. Deep harbor-blue surfaces, one warm lamp
+ * color for Beacon itself, and verdict colors used ONLY for verdicts:
+ * red = scam, amber = suspicious, green = safe. No carrier branding.
+ */
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, system-ui, "Segoe UI", Roboto,
+    sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-harbor-950: #050a14;
+  --color-harbor-900: #08111f;
+  --color-harbor-850: #0c1729;
+  --color-harbor-800: #101d33;
+  --color-harbor-700: #172741;
+  --color-harbor-600: #213555;
+  --color-harbor-500: #34496d;
+
+  --color-ink: #f3f6fb;
+  --color-ink-2: #b4c0d4;
+  --color-ink-3: #7d8ca6;
+
+  --color-lamp: #ffc861;
+  --color-lamp-deep: #e9a23b;
+
+  --color-scam: #ff5a52;
+  --color-warn: #ffa53a;
+  --color-safe: #3ddc97;
+
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-harbor-950);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-lamp);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Thin, quiet scrollbars inside the phone and panels. */
+  .scroll-quiet {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-harbor-600) transparent;
+  }
+  .scroll-quiet::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scroll-quiet::-webkit-scrollbar-thumb {
+    background: var(--color-harbor-600);
+    border-radius: 3px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* The lamp breathes slowly while Beacon watches. */
+@keyframes lamp-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+.lamp-breathe {
+  animation: lamp-breathe 3.2s ease-in-out infinite;
+}
+
+/* A beam sweeps across the banner while Beacon is working. */
+@keyframes beam-sweep {
+  from {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(320%) skewX(-18deg);
+  }
+}
+.beam-sweep {
+  animation: beam-sweep 2.4s var(--ease-out-quint) infinite;
+}
+
+@keyframes ring-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+.ring-pulse {
+  animation: ring-pulse 1.6s ease-out infinite;
+}

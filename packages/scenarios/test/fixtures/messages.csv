@@ -1,0 +1,7 @@
+message,is_scam,category,baseline_pred
+"Your toll balance is $5, pay at http://x.top",1,Toll Notice,1
+"Lunch at noon?
+Bring the notes, ok",0,legit,0
+"He said ""call me"", urgent, send gift cards",1,Family Emergency Scam,0
+"",1,Toll,1
+"Package held, pay fee",1,Weird Unknown Category,1

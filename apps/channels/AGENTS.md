@@ -40,18 +40,38 @@ alternatives first: (a) scripted call scenarios in the phone UI (already planned
 
 ## Backlog
 **Must**
-- [ ] `src/main.ts`: provider from env, graceful fallback to terminal with a clear message
-- [ ] Inbound routing (verification reply vs. new event vs. forwarded)
-- [ ] Outbound verification sends via SSE subscription (reconnect + `since`)
-- [ ] Forward-to-check verdict replies
-- [ ] Unit tests for routing + formatting; server-down retry with backoff
+- [x] `src/main.ts`: provider from env, graceful fallback to terminal with a clear message
+- [x] Inbound routing (verification reply vs. new event vs. forwarded)
+- [x] Outbound verification sends via SSE subscription (reconnect + `since`)
+- [x] Forward-to-check verdict replies
+- [x] Unit tests for routing + formatting; server-down retry with backoff
 
 **Stretch**
 - [ ] Voice memo → transcript → event
-- [ ] SIP call path (design doc first)
+- [x] SIP call path design doc first: see `VOICE.md` (design only, not implemented)
 
 ## Status
-- Placeholder `src/main.ts` only.
+All **Must** items done; 33 vitest tests pass; `pnpm -F @beacon/channels typecheck` clean.
+
+**Layout** (`src/`): `config.ts` (env -> config, falls back to terminal with a warning), `handles.ts` (phone/email
+normalization), `route.ts` (pure: verification-reply vs new-event, forward unwrapping), `format.ts` (pure: question +
+<=480-char verdict, strips links), `sse.ts` (chunk-safe SSE parser), `server-client.ts` (typed HTTP + SSE with backoff and
+`?since` resume), `bridge.ts` (state + wiring, testable with fakes), `transport.ts` (interface),
+`spectrum-transport.ts` (Photon adapter), `stdio-transport.ts` (plain stdin fallback), `main.ts`.
+
+**Run:** `pnpm dev:channels`. Default is the terminal provider. With a TTY it uses Spectrum's terminal TUI; without one
+(pipes, CI) or if Spectrum fails to start it uses plain stdin/stdout. In stdin mode type `+15550100142> No, that's not me`
+to speak as another handle (e.g. the trusted contact answering a verification). Real iMessage: set
+`CHANNELS_PROVIDER=imessage`, `SPECTRUM_PROJECT_ID`, `SPECTRUM_PROJECT_SECRET`.
+
+**Smoke test (server down):** `echo test | timeout 8 npx tsx src/main.ts` starts in stdin mode, logs
+"Beacon server not reachable ... retrying in 0.7s" with growing backoff (0.5s -> 10s cap), no crash.
+
+**Known gaps:** the real Spectrum iMessage and terminal-TUI paths are typed against the SDK `.d.ts` but untested
+(no credentials / no TTY here); the terminal provider's outbound `space.create(handle)` is unverified, so a failed
+send is only logged. `voice` content (memos) is ignored. Forwards carry the forwarder as `from` unless the
+forward header names the original sender. Only one pending request per handle is answered per reply (latest wins).
+Pending/verdict state is in-memory (lost on restart; pending is re-seeded from `GET /api/verifications/pending`).
 
 ## Requests from other lanes
 _(append here)_

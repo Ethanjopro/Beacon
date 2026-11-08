@@ -10,11 +10,12 @@ out-of-band verification. Routes and payloads are defined in `@beacon/shared` `A
 ```
 src/main.ts      boot: read env → agentConfigFromEnv → createApp → serve
 src/index.ts     export { createApp } for tests
-src/app.ts       createApp({ agentConfig, contacts, scenarios, clock? }) → { app, bus, store }
+src/app.ts       createApp(options) → { app, bus, store, broker, contacts, agent, idle } + all routes
 src/bus.ts       trace bus: stamps seq/at, ring buffer (~5k), subscribers
 src/store.ts     events, verdicts, outcomes by eventId
 src/verify.ts    verification broker (pending map, simulator auto-reply, timeouts)
-src/routes/*.ts  one file per resource
+src/sse.ts       SSE handler (replay, heartbeat, abort cleanup)
+src/contacts.ts  safe-word stripping + BEACON_VERIFY_<ID> overrides
 test/*.test.ts   app.request()-based tests (no real network)
 ```
 
@@ -45,16 +46,21 @@ without committing a real number.
 
 ## Backlog
 **Must**
-- [ ] Everything under Behavior + Verification broker + overrides
-- [ ] CORS for local dev; JSON error bodies; zod validation on every input
-- [ ] Tests: fire a scenario → verdict in store; SSE format + replay; reply resolves pending; timeout path; safe words never leave
+- [x] Everything under Behavior + Verification broker + overrides
+- [x] CORS for local dev; JSON error bodies; zod validation on every input
+- [x] Tests: fire a scenario → verdict in store; SSE format + replay; reply resolves pending; timeout path; safe words never leave
 
 **Should**
 - [ ] Optional JSON-file persistence of the last session (survive a restart mid-demo)
-- [ ] Request log line per event with latency
+- [x] Request log line per event with latency
 
 ## Status
-- Placeholder `src/main.ts` only.
+- Done: all Must items and the log-line Should item. `pnpm -F @beacon/server test` (15 tests) covers scenarios, SSE format/replay/live, manual reply, timeout, reset, safe-word secrecy, env overrides.
+- Run: `pnpm -F @beacon/server start` (or `pnpm dev` at the root). Env: `BEACON_PORT`, `LLM_PROVIDER`, `NVIDIA_API_KEY`, `VERIFY_TIMEOUT_MS`, `BEACON_VERIFY_<CONTACT_ID>=<channel>:<handle>`.
+- Testing: `createApp({ simulatorDelayMs, agentConfig: { verifyTimeoutMs }, scenarios, env, log })`; `await ctx.idle()` waits for agent runs.
+- Safe words are scrubbed from stored/traced `event.received` bodies; the agent gets the raw event.
+- `POST /api/reset` clears store/buffer and resolves waiting verifications as `unreachable`; trace `seq` stays monotonic.
+- Known gaps: JSON-file persistence not done; no auth (dev/demo only); SSE cursor ahead of server seq restarts from 0.
 
 ## Requests from other lanes
 _(append here)_

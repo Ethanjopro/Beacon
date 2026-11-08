@@ -11,6 +11,7 @@
     "test": "vitest run --passWithNoTests",
     "list": "tsx src/cli.ts list",
     "fire": "tsx src/cli.ts fire",
+    "demo": "tsx src/cli.ts demo",
     "eval": "tsx src/cli.ts eval"
   },
   "dependencies": {

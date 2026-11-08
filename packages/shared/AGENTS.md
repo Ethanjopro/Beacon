@@ -27,3 +27,11 @@ inferred TypeScript types + a few pure helpers (`confidence.ts`).
 
 ## Requests from other lanes
 _(append here: who, what, why)_
+
+- **Phone → shared:** a stream-level reset notification (e.g. a `{ type: "reset" }` trace body,
+  or a second SSE event name) so every client clears state after `POST /api/reset`. Today the
+  phone uses a same-origin BroadcastChannel, which doesn't reach other devices. *Open.*
+- **Channels → shared:** optional `forwardedBy?: Party` on `IncomingEvent`/`NewEvent`, so a
+  forwarded message keeps the original sender in `from`. Today `from` is the forwarder, and the
+  agent skips sender-registry signals for `source: "forwarded"`. *Open.*
+- **Phone → shared:** document `?since` semantics. *Done:* exclusive, seq starts at 1 (see `api.ts`).
