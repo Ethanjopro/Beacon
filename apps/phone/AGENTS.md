@@ -132,3 +132,15 @@ non-saved number, timed `transcript`, `trustedContactReply` from `sam`). The pho
 **From phone → server (CENG 1):** (1) the phone connects with `?since=0` on first load to restore state after a refresh;
 please treat `since` as exclusive and start `seq` at 1. (2) After `POST /api/reset` nothing on the stream tells clients;
 the phone uses a same-origin BroadcastChannel today — a `reset` SSE event would make it robust across devices.
+
+### Landing page (2026-11-08)
+- [x] Graphite/glass landing, CSS 3D phone entrance and levitation, scroll tilt and lifted verification panel; reduced-motion fallback.
+- [x] Landing actions lead to existing live stage, console, and architecture. Illustrative phone is explicitly a product preview, not fabricated call output.
+- Checked repository typechecks/tests and production build; desktop 1440x900 and mobile 390x844 inspected. Ran live grandson-bail-call with local server (callback configured as simulator).
+- No dependencies added. Existing phone/trace UI preserved below landing. Changes are uncommitted.
+
+
+- Palette follow-up: shared harbor tokens now use graphite, rose accents, and neutral text to match the landing across phone, console, and architecture; risk colors retained. Device bezel and decorative glow also aligned.
+
+- Scroll follow-up: monotonic angle-to-front zoom, fading/sliding side cards, same handset reveals Phone/Screening apps. Mouse keypad and keyboard tel input added. Frontend typecheck passes.
+- ~~REQUEST TO BACKEND: outbound dial endpoint~~ Done: `POST /api/calls/dial` (`API.callsDial`, allowlisted numbers only). The dialer uses it and shows the server's refusal reasons (403 not allowlisted, 409 call already live) under the number.

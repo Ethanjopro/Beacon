@@ -10,13 +10,16 @@ import { useViewport } from "./lib/useViewport";
 import { PhoneApp } from "./PhoneApp";
 import { latestEvent } from "./state/reducer";
 import { useBeacon } from "./state/store";
+import { LandingPage } from "./screens/LandingPage";
 
 /** Layout shell: stage (phone + judges' panels) or the standalone console route. */
 export function App() {
+  const [demoRoute, setDemoRoute] = useState(() => location.hash === "#/demo");
   const [consoleRoute, setConsoleRoute] = useState(() => isConsoleRoute());
   const [archRoute, setArchRoute] = useState(() => isArchitectureRoute());
   useEffect(() => {
     const onHash = () => {
+      setDemoRoute(location.hash === "#/demo");
       setConsoleRoute(isConsoleRoute());
       setArchRoute(isArchitectureRoute());
     };
@@ -32,7 +35,8 @@ export function App() {
     );
   }
   if (archRoute) return <ArchitecturePage />;
-  return <Stage />;
+  if (demoRoute) return <Stage />;
+  return <LandingPage />;
 }
 
 function Stage() {
@@ -107,8 +111,10 @@ function Backdrop() {
       className="pointer-events-none absolute inset-0"
       style={{
         background:
-          "radial-gradient(ellipse 50% 60% at 50% 35%, rgba(255,200,97,0.07), transparent 70%), radial-gradient(ellipse 80% 60% at 50% 110%, rgba(33,53,85,0.55), transparent 70%)",
+          "radial-gradient(ellipse 50% 60% at 50% 35%, rgba(217,154,199,0.10), transparent 70%), radial-gradient(ellipse 80% 60% at 50% 110%, rgba(113,65,99,0.25), transparent 70%)",
       }}
     />
   );
 }
+
+

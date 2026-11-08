@@ -55,7 +55,7 @@ export function StoryRail({ view, mode, status }: { view?: EventView; mode: "liv
                 style={{
                   background: on ? "var(--color-lamp)" : "var(--color-harbor-700)",
                   color: on ? "var(--color-harbor-900)" : "var(--color-ink-2)",
-                  boxShadow: on ? "0 0 22px rgba(255,200,97,0.55)" : "none",
+                  boxShadow: on ? "0 0 22px rgba(217,154,199,0.35)" : "none",
                 }}
               >
                 {i + 1}
@@ -78,3 +78,4 @@ export function StoryRail({ view, mode, status }: { view?: EventView; mode: "liv
     </div>
   );
 }
+

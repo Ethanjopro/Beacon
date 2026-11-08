@@ -25,7 +25,7 @@ export function PhoneFrame({ compact, maxHeight, children }: { compact: boolean;
   return (
     <div style={{ width: outerW * scale, height: outerH * scale }} className="shrink-0">
       <div
-        className="relative origin-top-left rounded-[64px] bg-[#1a2232] p-3 shadow-[0_40px_120px_-20px_rgba(0,0,0,0.8),0_0_0_1.5px_#2c3850,inset_0_0_0_1.5px_#0b0f18]"
+        className="relative origin-top-left rounded-[64px] bg-[#39353e] p-3 shadow-[0_40px_120px_-20px_rgba(0,0,0,0.8),0_0_0_1.5px_#817684,inset_0_0_0_1.5px_#121014]"
         style={{ width: outerW, height: outerH, transform: `scale(${scale})` }}
         data-testid="phone-frame"
       >
@@ -52,3 +52,4 @@ function StatusBar() {
     </div>
   );
 }
+
