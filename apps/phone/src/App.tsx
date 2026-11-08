@@ -69,6 +69,19 @@ function Stage() {
         </div>
       )}
 
+      {/* Phones have no `d` key and no trace panel: give offline demos a tappable way into the console. */}
+      {compact && backend.mode === "mock" && !consoleOpen && (
+        <button
+          type="button"
+          onClick={() => setConsoleOpen(true)}
+          aria-label="Open demo console"
+          className="fixed top-[58%] right-0 z-[90] rounded-l-xl border border-r-0 border-lamp/40 bg-harbor-800/90 py-3 pl-1.5 text-[11px] font-bold tracking-[0.12em] text-lamp shadow-lg backdrop-blur [writing-mode:vertical-rl]"
+          style={{ paddingRight: "max(6px, env(safe-area-inset-right, 0px))" }}
+        >
+          DEMO
+        </button>
+      )}
+
       <AnimatePresence>
         {consoleOpen && (
           <motion.div
