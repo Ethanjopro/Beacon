@@ -77,7 +77,7 @@ security & privacy, detection accuracy** — see `docs/JUDGING.md`.
 | `packages/scenarios` | Data & simulation | **CENG 2** | Synthetic scam library, trusted-contact registry, scenario runner, eval harness (T-Mobile set + baseline comparison) |
 | `docs/` | Everyone | Lead | Plan, architecture, judging map, demo script |
 
-Team roster (fill in): Lead = `@Ethanjopro` · SWE 1 = `__` · SWE 2 = `__` · CENG 1 = `__` · CENG 2 = `__`.
+Team roster (fill in): Lead = `@Ethanjopro` · SWE 1 = `@Rana-Shumail` · SWE 2 = `__` · CENG 1 = `__` · CENG 2 = `__`.
 
 ## Commands
 

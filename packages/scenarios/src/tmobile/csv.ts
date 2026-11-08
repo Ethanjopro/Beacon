@@ -3,7 +3,8 @@
  * embedded commas/newlines, CRLF or LF, optional BOM. Returns rows of strings.
  */
 export function parseCsv(input: string): string[][] {
-  const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
+  const normalized = input.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const text = normalized.charCodeAt(0) === 0xfeff ? normalized.slice(1) : normalized;
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -31,10 +32,7 @@ export function parseCsv(input: string): string[][] {
     } else if (ch === '"' && field === "") inQuotes = true;
     else if (ch === ",") endField();
     else if (ch === "\n") endRow();
-    else if (ch === "\r") {
-      if (text[i + 1] === "\n") i++;
-      endRow();
-    } else field += ch;
+    else field += ch;
   }
   // Flush the last row unless the file ended on a newline.
   if (field !== "" || row.length > 0) endRow();
