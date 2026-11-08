@@ -110,3 +110,37 @@ export type NewTrustedContact = z.input<typeof NewTrustedContact>;
 export const CodeWordCheck = z.object({ attempt: z.string().min(1).max(200) });
 export const CodeWordResult = z.object({ match: z.boolean(), hasCodeWord: z.boolean() });
 export type CodeWordResult = z.infer<typeof CodeWordResult>;
+
+/**
+ * After the call: a ~30-second "what gave it away" recap for the subscriber, written by
+ * Nemotron from the redacted call, plus an optional practice drill on a similar scam.
+ */
+export const CallRecap = z.object({
+  callId: z.string().min(1),
+  /** One line: what happened on this call. */
+  headline: z.string().min(1),
+  /** What gave it away, most telling first. */
+  tells: z
+    .array(
+      z.object({
+        sign: z.string().min(1),
+        lesson: z.string().min(1),
+      }),
+    )
+    .min(1)
+    .max(4),
+  /** One line to remember. */
+  takeaway: z.string().min(1),
+  drill: z
+    .object({
+      /** A NEW, similar scam line to practice on (not this call). */
+      scenario: z.string().min(1),
+      question: z.string().min(1),
+      options: z.array(z.string().min(1)).min(2).max(4),
+      answerIndex: z.number().int().nonnegative(),
+      explanation: z.string().min(1),
+    })
+    .refine((d) => d.answerIndex < d.options.length, { message: "answerIndex out of range" })
+    .optional(),
+});
+export type CallRecap = z.infer<typeof CallRecap>;
