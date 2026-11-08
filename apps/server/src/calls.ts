@@ -6,7 +6,10 @@
  *   - the normalized Photon event's first words.
  * Nothing here is stored beyond the life of the call.
  */
+import { normalizeHandle } from "./normalize.js";
+
 interface Session {
+  handle?: string;
   queue: string[];
   script: string[];
   waiter?: { resolve: (words: string | null) => void; timer: ReturnType<typeof setTimeout> };
@@ -24,14 +27,25 @@ export class CallSessions {
 
   constructor(private readonly options: CallSessionOptions = {}) {}
 
-  open(callId: string, init: { firstWords?: string; script?: string[] } = {}): void {
+  open(callId: string, init: { handle?: string; firstWords?: string; script?: string[] } = {}): void {
     const queue = init.firstWords?.trim() ? [init.firstWords.trim()] : [];
-    this.sessions.set(callId, { queue, script: [...(init.script ?? [])], closed: false });
+    this.sessions.set(callId, { handle: init.handle, queue, script: [...(init.script ?? [])], closed: false });
   }
 
   has(callId: string): boolean {
     const s = this.sessions.get(callId);
     return Boolean(s && !s.closed);
+  }
+
+  /** Finds a live session by caller handle (e.g. to route incoming webhook messages to an active call). */
+  findByHandle(handle: string): string | undefined {
+    const norm = normalizeHandle(handle);
+    for (const [id, s] of this.sessions) {
+      if (!s.closed && s.handle && normalizeHandle(s.handle) === norm) {
+        return id;
+      }
+    }
+    return undefined;
   }
 
   /** The caller says something. Returns false if the call is unknown or over. */

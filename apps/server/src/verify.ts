@@ -1,4 +1,5 @@
 import type { Scenario, VerificationReply, VerificationRequest, VerificationResult } from "@beacon/shared";
+import type { CallbackProvider } from "./callback.js";
 
 interface Pending {
   request: VerificationRequest;
@@ -13,6 +14,8 @@ export interface BrokerOptions {
   /** Overrides the scenario's reply delay (tests use ~0). */
   simulatorDelayMs?: number;
   now?: () => Date;
+  /** Outbound phone call provider when request.channel === "call". */
+  callbackProvider?: CallbackProvider;
 }
 
 /**
@@ -33,6 +36,16 @@ export class VerificationBroker {
         timer: setTimeout(() => this.settle(request.id, { status: "timeout", detail: `No reply within ${request.timeoutMs}ms` }), request.timeoutMs),
       };
       this.pending.set(request.id, entry);
+
+      if (request.channel === "call" && this.options.callbackProvider) {
+        this.options.callbackProvider
+          .call(request)
+          .then((result) => this.settle(request.id, result))
+          .catch((err) =>
+            this.settle(request.id, { status: "unreachable", detail: err instanceof Error ? err.message : String(err) })
+          );
+        return;
+      }
 
       const scripted = request.channel === "simulator" ? this.options.scenarioForEvent(request.eventId)?.trustedContactReply : undefined;
       if (scripted && scripted.contactId === request.contactId) {

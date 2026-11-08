@@ -20,12 +20,19 @@ import {
 } from "@beacon/shared";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { ZodType } from "zod";
 import { TraceBus } from "./bus.js";
+import { ElevenLabsPhotonCallback, type CallbackProvider } from "./callback.js";
 import { CallSessions } from "./calls.js";
 import { applyVerifyOverrides, toPublicContact } from "./contacts.js";
-import { normalizeEventCall, normalizeScenarioCall, normalizeSimCall, type NormalizedCall } from "./normalize.js";
+import {
+  normalizeEventCall,
+  normalizePhotonWebhook,
+  normalizeScenarioCall,
+  normalizeSimCall,
+  type NormalizedCall,
+} from "./normalize.js";
 import { TrustedRegistry, toRecord } from "./registry.js";
 import { traceStream } from "./sse.js";
 import { Store } from "./store.js";
@@ -50,6 +57,12 @@ export interface CreateAppOptions {
   env?: Record<string, string | undefined>;
   /** Overrides the scripted simulator reply delay (tests). */
   simulatorDelayMs?: number;
+  /** Secret for verifying Photon webhooks (X-Spectrum-Signature). */
+  photonWebhookSecret?: string;
+  /** Secret for verifying ElevenLabs webhooks (ElevenLabs-Signature). */
+  elevenlabsWebhookSecret?: string;
+  /** Outbound phone call provider when request.channel === "call". */
+  callbackProvider?: CallbackProvider;
   /** Swap the agent (tests). */
   agentFactory?: (deps: Parameters<typeof createAgent>[0], config: Partial<AgentConfig>) => Agent;
   clock?: () => Date;
@@ -59,6 +72,60 @@ export interface CreateAppOptions {
 }
 
 const newEventId = () => `evt_${randomBytes(5).toString("hex")}`;
+
+/** Verifies Photon Spectrum HMAC-SHA256 signature (X-Spectrum-Signature = v0=<hex>). */
+export function verifySpectrumSignature(
+  rawBody: string,
+  sigHeader: string,
+  tsHeader: string,
+  secret: string
+): boolean {
+  if (!sigHeader.startsWith("v0=")) return false;
+  const receivedHex = sigHeader.slice(3);
+  const payload = `v0:${tsHeader}:${rawBody}`;
+  const computedHex = createHmac("sha256", secret).update(payload).digest("hex");
+  const a = Buffer.from(receivedHex, "hex");
+  const b = Buffer.from(computedHex, "hex");
+  if (a.length !== b.length || a.length === 0) return false;
+  return timingSafeEqual(a, b);
+}
+
+/**
+ * Verifies an ElevenLabs webhook HMAC-SHA256 signature. Their public docs don't spell out the
+ * header format, so this accepts "t=<ts>,v0=<hex>" or "t=<ts>,v1=<hex>" (HMAC of "<ts>.<body>")
+ * and a bare hex HMAC of the body. A timestamp older than 30 minutes is rejected (replay).
+ * If a real webhook gets 401, compare with their SDK's constructEvent.
+ */
+export function verifyElevenLabsSignature(
+  rawBody: string,
+  sigHeader: string | undefined,
+  secret: string,
+  nowSec?: number,
+): boolean {
+  if (!sigHeader || !secret) return false;
+  let signature = sigHeader.trim();
+  let timestamp: string | undefined;
+  const tMatch = sigHeader.match(/t=(\d+)/);
+  const vMatch = sigHeader.match(/v[01]=([a-f0-9]+)/i);
+  if (vMatch) {
+    signature = vMatch[1] ?? "";
+    timestamp = tMatch ? tMatch[1] : undefined;
+  }
+  if (timestamp && nowSec !== undefined && Math.abs(nowSec - Number(timestamp)) > 30 * 60) return false;
+  const candidates: string[] = [];
+  if (timestamp) {
+    candidates.push(createHmac("sha256", secret).update(`${timestamp}.${rawBody}`).digest("hex"));
+  }
+  candidates.push(createHmac("sha256", secret).update(rawBody).digest("hex"));
+  const b = Buffer.from(signature, "hex");
+  for (const cand of candidates) {
+    const a = Buffer.from(cand, "hex");
+    if (a.length === b.length && a.length > 0 && timingSafeEqual(a, b)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 /** Parses a JSON body with zod; throws a 400-mapped error on failure. */
 class BadRequest extends Error {
@@ -87,6 +154,22 @@ export function createApp(options: CreateAppOptions = {}) {
   const contacts = () => applyVerifyOverrides(registry.all(), options.env ?? {});
   const agentConfig: AgentConfig = { ...DEFAULT_AGENT_CONFIG, ...options.agentConfig };
 
+  const callbackProvider =
+    options.callbackProvider ??
+    (options.env?.ELEVENLABS_API_KEY && options.env?.ELEVENLABS_AGENT_ID && options.env?.ELEVENLABS_PHONE_NUMBER_ID
+      ? new ElevenLabsPhotonCallback({
+          apiKey: options.env.ELEVENLABS_API_KEY,
+          agentId: options.env.ELEVENLABS_AGENT_ID,
+          phoneNumberId: options.env.ELEVENLABS_PHONE_NUMBER_ID,
+          outboundUrl:
+            options.env.ELEVENLABS_OUTBOUND_URL ||
+            (options.env.ELEVENLABS_TELEPHONY_PROVIDER === "twilio"
+              ? "https://api.elevenlabs.io/v1/convai/twilio/outbound-call"
+              : "https://api.elevenlabs.io/v1/convai/sip-trunk/outbound-call"),
+          now: clock,
+        })
+      : undefined);
+
   const bus = new TraceBus(undefined, clock);
   const store = new Store();
   bus.subscribe((trace) => store.record(trace));
@@ -97,6 +180,7 @@ export function createApp(options: CreateAppOptions = {}) {
     },
     simulatorDelayMs: options.simulatorDelayMs,
     now: clock,
+    callbackProvider,
   });
   const deps = { contacts, verify: broker.verify, emit: bus.emit, now: clock };
   const makeAgent = () => (options.agentFactory ? options.agentFactory(deps, agentConfig) : createAgent(deps, agentConfig));
@@ -116,7 +200,7 @@ export function createApp(options: CreateAppOptions = {}) {
     const event: IncomingEvent = { ...input, id: input.id ?? newEventId(), body: "", transcript: undefined, receivedAt: input.receivedAt ?? clock().toISOString() };
     store.putEvent(event);
     bus.emit(event.id, { type: "event.received", event });
-    sessions.open(event.id, { firstWords: normalized.firstWords, script: normalized.script });
+    sessions.open(event.id, { handle: normalized.event.from.handle, firstWords: normalized.firstWords, script: normalized.script });
     const started = Date.now();
     const job = screener
       .screen(event)
@@ -200,6 +284,129 @@ export function createApp(options: CreateAppOptions = {}) {
     return c.json({ ok: true });
   });
 
+  // ── Photon webhook listener ──
+  app.post("/webhooks/photon", async (c) => {
+    const sigHeader = c.req.header("X-Spectrum-Signature") ?? c.req.header("x-spectrum-signature");
+    const tsHeader = c.req.header("X-Spectrum-Timestamp") ?? c.req.header("x-spectrum-timestamp");
+
+    if (!sigHeader || !tsHeader) {
+      return c.json({ error: "Missing signature headers" }, 400);
+    }
+
+    const tsNum = Number(tsHeader);
+    if (Number.isNaN(tsNum)) {
+      return c.json({ error: "Invalid timestamp header" }, 400);
+    }
+
+    const nowSec = Math.floor(clock().getTime() / 1000);
+    if (Math.abs(nowSec - tsNum) > 300) {
+      return c.json({ error: "Stale timestamp" }, 401);
+    }
+
+    const secret = options.photonWebhookSecret ?? options.env?.PHOTON_WEBHOOK_SECRET ?? "";
+    if (!secret) {
+      return c.json({ error: "Webhook secret not configured" }, 401);
+    }
+
+    const rawBody = await c.req.text();
+    if (!verifySpectrumSignature(rawBody, sigHeader, tsHeader, secret)) {
+      return c.json({ error: "Invalid signature" }, 401);
+    }
+
+    let json: unknown;
+    try {
+      json = JSON.parse(rawBody);
+    } catch {
+      return c.json({ error: "Body must be valid JSON" }, 400);
+    }
+
+    let normalized: NormalizedCall;
+    try {
+      normalized = normalizePhotonWebhook(json);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 400);
+    }
+
+    const liveCallId = sessions.findByHandle(normalized.event.from.handle);
+    if (liveCallId) {
+      if (normalized.firstWords) {
+        sessions.say(liveCallId, normalized.firstWords);
+      }
+      return c.json({ ok: true, callId: liveCallId, routed: "say" }, 202);
+    }
+
+    const callId = ingestCall(normalized);
+    return c.json({ ok: true, callId }, 202);
+  });
+
+  // ── ElevenLabs webhook listener (post-call transcript or server tool) ──
+  app.post("/webhooks/elevenlabs", async (c) => {
+    const secret = options.elevenlabsWebhookSecret ?? options.env?.ELEVENLABS_WEBHOOK_SECRET;
+    // No secret, no endpoint: an unsigned answer could fake "yes, it's me" and pass the bridge gate.
+    // Without a secret the callback still works by polling the call transcript.
+    if (!secret) return c.json({ error: "Webhook secret not configured" }, 401);
+    const rawBody = await c.req.text();
+    const sigHeader = c.req.header("ElevenLabs-Signature") ?? c.req.header("elevenlabs-signature");
+    if (!verifyElevenLabsSignature(rawBody, sigHeader, secret, Math.floor(clock().getTime() / 1000))) {
+      return c.json({ error: "Invalid signature" }, 401);
+    }
+
+    let body: Record<string, any>;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return c.json({ error: "Body must be valid JSON" }, 400);
+    }
+
+    const conversationId =
+      body.data?.conversation_id ??
+      body.conversation_id ??
+      body.conversationId ??
+      body.data?.conversationId;
+
+    let requestId =
+      body.requestId ??
+      body.request_id ??
+      // Where ElevenLabs puts our dynamic variables in post-call webhooks.
+      body.data?.conversation_initiation_client_data?.dynamic_variables?.request_id ??
+      body.data?.dynamic_variables?.request_id ??
+      c.req.query("request_id") ??
+      c.req.query("requestId");
+
+    if (!requestId && conversationId && callbackProvider instanceof ElevenLabsPhotonCallback) {
+      requestId = callbackProvider.getRequestIdForConversation(conversationId);
+    }
+
+    let text =
+      body.text ??
+      body.answer ??
+      body.message;
+
+    if (!text && Array.isArray(body.data?.transcript)) {
+      const userLines = body.data.transcript
+        .filter((t: any) => t && t.role === "user")
+        .map((t: any) => String(t.message ?? ""))
+        .filter(Boolean);
+      text = userLines.join(" ").trim();
+    } else if (!text && Array.isArray(body.transcript)) {
+      const userLines = body.transcript
+        .filter((t: any) => t && t.role === "user")
+        .map((t: any) => String(t.message ?? ""))
+        .filter(Boolean);
+      text = userLines.join(" ").trim();
+    }
+
+    if (requestId && text) {
+      const replied = broker.reply(requestId, { text });
+      if (callbackProvider instanceof ElevenLabsPhotonCallback) {
+        callbackProvider.resolvePending(requestId, text);
+      }
+      return c.json({ ok: true, requestId, replied }, 200);
+    }
+
+    return c.json({ ok: false, note: "Webhook received but could not match a pending request with answer" }, 200);
+  });
+
   // ── Trusted registry (SQLite). Code words never leave over HTTP. ──
   app.get(API.trusted, (c) => {
     const claim = c.req.query("claim");
@@ -249,6 +456,7 @@ export function createApp(options: CreateAppOptions = {}) {
     registry,
     sessions,
     screener,
+    callbackProvider,
     /** Registry contacts with live-demo overrides applied (code words included — server-side only). */
     get contacts() {
       return contacts();

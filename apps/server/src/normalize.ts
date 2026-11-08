@@ -17,6 +17,66 @@ export interface NormalizedCall {
 
 const clean = (s: string | undefined) => s?.replace(/\s+/g, " ").trim() || undefined;
 
+/**
+ * Handle normalization so "(555) 010-0142", "+1 555-010-0142" and "5550100142"
+ * all compare equal. Emails/platform handles are trimmed + lowercased.
+ */
+export function normalizeHandle(raw: string): string {
+  const s = raw.trim();
+  if (s.includes("@")) return s.toLowerCase();
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 0) return s.toLowerCase();
+  if (s.startsWith("+")) return `+${digits}`;
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return `+${digits}`;
+}
+
+/** POST /webhooks/photon: normalize a signed Photon message event into a call. */
+export function normalizePhotonWebhook(input: unknown): NormalizedCall {
+  if (!input || typeof input !== "object") {
+    throw new Error("Invalid Photon webhook payload: expected object");
+  }
+  const raw = input as Record<string, any>;
+  const msg = raw.message ?? raw;
+  const senderId =
+    msg.sender?.id ??
+    msg.senderId ??
+    msg.sender?.handle ??
+    msg.from?.handle ??
+    msg.from ??
+    raw.from?.handle ??
+    raw.from;
+  if (!senderId || typeof senderId !== "string" || !senderId.trim()) {
+    throw new Error("Invalid Photon webhook payload: missing sender handle");
+  }
+
+  const rawText =
+    (typeof msg.content === "object" && msg.content ? msg.content.text : undefined) ??
+    msg.text ??
+    msg.body ??
+    raw.text ??
+    "";
+  const text = typeof rawText === "string" ? rawText : "";
+  const displayName =
+    clean(msg.sender?.displayName) ??
+    clean(msg.sender?.name) ??
+    clean(raw.from?.displayName);
+
+  const handle = senderId.trim();
+
+  return {
+    event: {
+      kind: "call",
+      source: "photon",
+      from: { handle, ...(displayName ? { displayName } : {}) },
+      body: "",
+      threadId: `call_${handle}`,
+    },
+    firstWords: clean(text),
+  };
+}
+
 /** POST /api/calls (sim injection, judge input). Throws a ZodError on bad input. */
 export function normalizeSimCall(input: unknown): NormalizedCall {
   const call = NewCall.parse(input);

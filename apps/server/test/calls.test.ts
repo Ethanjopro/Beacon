@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TraceEvent, TrustedRecord, type EventDetail } from "@beacon/shared";
-import { createApp, type CreateAppOptions } from "../src/index.js";
+import { createApp, ElevenLabsPhotonCallback, type CreateAppOptions } from "../src/index.js";
 
 /** Stands in for Nemotron (tests only — the screener itself has no offline brain). */
 function fakeNemotron(replies: object[]) {
@@ -124,6 +124,90 @@ describe("calls: sim injection → normalize → screener → verdict", () => {
     expect(detail.event.transcript).toBeUndefined(); // the screener hears the script live, not a pre-baked transcript
     expect(detail.screening).toMatchObject({ decidedBy: "error", action: "voicemail" });
     expect(detail.verdict).toBeUndefined(); // the text pipeline never ran
+  });
+
+  it("performs real outbound callback with ElevenLabsPhotonCallback and blocks when contact denies", async () => {
+    let capturedTo = "";
+    let capturedBody: any = null;
+
+    const fakeElevenLabsFetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes("outbound-call")) {
+        capturedBody = JSON.parse(String(init?.body));
+        capturedTo = capturedBody.to_number;
+        return new Response(JSON.stringify({ conversation_id: "conv_live_123" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (u.includes("conversations/conv_live_123")) {
+        return new Response(
+          JSON.stringify({
+            status: "done",
+            transcript: [
+              { role: "agent", message: "Is this you calling about bail?" },
+              { role: "user", message: "No, that is NOT me!" },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    }) as typeof fetch;
+
+    const callbackProvider = new ElevenLabsPhotonCallback({
+      apiKey: "xi_test_key",
+      agentId: "agent_test_abc",
+      phoneNumberId: "phone_test_xyz",
+      fetch: fakeElevenLabsFetch,
+      pollIntervalMs: 20,
+    });
+
+    const nemotron = fakeNemotron([
+      tool("lookup_trusted_contact", { claim: "grandson" }),
+      tool("request_callback", { contact_ref: "CONTACT_1", question: "Is this you calling about bail?" }),
+      { content: '{"status":"denied"}' },
+      say({
+        say: "I cannot connect you.",
+        action: "end",
+        risk: 98,
+        signals: [],
+        verdict: {
+          verdict: "SCAM",
+          confidence: 96,
+          evidence: ["The real grandson answered the callback and denied calling."],
+          next_action: "Blocked.",
+        },
+      }),
+    ]);
+
+    const ctx = createApp({
+      ...quiet,
+      env: { BEACON_VERIFY_SAM: "call:+15550100002" },
+      callbackProvider,
+      agentConfig: { ...quiet.agentConfig, apiKey: "test-key-not-real" },
+      screenerOptions: { fetch: nemotron.impl },
+    });
+
+    const res = await post(ctx, "/api/calls", {
+      from: { handle: "+15550104417", displayName: "Sam" },
+      firstWords: "Grandma, it's Sam, I'm in jail and need bail money",
+    });
+    expect(res.status).toBe(202);
+    const { callId } = (await res.json()) as { callId: string };
+    await ctx.idle();
+
+    // Verify ElevenLabs was dialed with Sam's saved registry number
+    expect(capturedTo).toBe("+15550100002");
+    expect(capturedBody.conversation_initiation_client_data.dynamic_variables.question).toBe("Is this you calling about bail?");
+
+    const detail = ctx.store.detail(callId)!;
+    expect(detail.screening).toMatchObject({
+      action: "block",
+      decidedBy: "nemotron",
+      checks: { callback: "denied" },
+      verdict: { verdict: "SCAM", confidence: 96 },
+    });
   });
 
   it("rejects bad input", async () => {
