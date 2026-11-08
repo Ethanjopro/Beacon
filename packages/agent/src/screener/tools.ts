@@ -125,6 +125,9 @@ function lookupTrusted(ctx: ScreenCtx, claim: string): unknown {
     caller_number_is_saved_for_them: found.senderIsKnownHandle,
     has_code_word: hasCodeWord,
     callback_number_on_file: true,
+    how_to_verify: hasCodeWord
+      ? "Ask for the family code word, and/or use request_callback."
+      : "No code word exists for this contact: do NOT ask for one. Verify with request_callback to their saved number.",
   };
 }
 

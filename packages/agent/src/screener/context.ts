@@ -70,8 +70,12 @@ export function setStatus(ctx: ScreenCtx, status: CallStatus, note?: string): vo
 }
 
 /** Placeholders and CONTACT_n refs must never be spoken to a caller. */
+/** How a contact placeholder reads aloud: organizations by role ("your bank"), people as "them". */
+const ORG_WORDS: Record<string, string> = { bank: "bank", employer: "employer", carrier: "phone carrier", government: "government office", service: "service provider" };
+
 export function speakable(text: string): string {
   return text
+    .replace(/\[CONTACT_\d+ \(([a-z]+)\)\]/g, (_m, rel: string) => (ORG_WORDS[rel] ? `your ${ORG_WORDS[rel]}` : "them"))
     .replace(/\[[A-Z_]+(?:_\d+)?(?: \([a-z]+\))?\]/g, "them")
     .replace(/\bCONTACT_\d+\b/gi, "them")
     .replace(/\s+/g, " ")
