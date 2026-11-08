@@ -12,6 +12,8 @@ interface Session {
   handle?: string;
   queue: string[];
   script: string[];
+  /** A sim caller with a script: once the script is used up, they've hung up. */
+  scripted: boolean;
   waiter?: { resolve: (words: string | null) => void; timer: ReturnType<typeof setTimeout> };
   scriptTimer?: ReturnType<typeof setTimeout>;
   closed: boolean;
@@ -29,7 +31,7 @@ export class CallSessions {
 
   open(callId: string, init: { handle?: string; firstWords?: string; script?: string[] } = {}): void {
     const queue = init.firstWords?.trim() ? [init.firstWords.trim()] : [];
-    this.sessions.set(callId, { handle: init.handle, queue, script: [...(init.script ?? [])], closed: false });
+    this.sessions.set(callId, { handle: init.handle, queue, script: [...(init.script ?? [])], scripted: (init.script?.length ?? 0) > 0, closed: false });
   }
 
   has(callId: string): boolean {
@@ -70,6 +72,7 @@ export class CallSessions {
       if (!s || s.closed) return resolve(null);
       const queued = s.queue.shift();
       if (queued !== undefined) return resolve(queued);
+      if (s.scripted && s.script.length === 0) return resolve(null); // the scripted caller has nothing left to say
       if (s.waiter) {
         // Only one listener at a time; the older one gives up.
         clearTimeout(s.waiter.timer);
