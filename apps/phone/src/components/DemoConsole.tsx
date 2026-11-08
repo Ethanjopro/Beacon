@@ -51,7 +51,9 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
   const fire = (id: string) =>
     run(`fire:${id}`, async () => {
       await backend.fire(id);
-      if (!standalone) onClose?.();
+      // On the standalone console page there's no phone on screen: go to the live dashboard to watch the call.
+      if (standalone) window.location.hash = "#/demo";
+      else onClose?.();
     });
 
   const orderedScenarios = scenarios ? orderScenarios(scenarios) : undefined;

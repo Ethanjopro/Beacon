@@ -181,7 +181,7 @@ async function modelTurn(ctx: ScreenCtx, turn: { mustDecide: boolean; turnsLeft:
   let content = "";
   try {
     // Every turn starts with at least one tool call (lookup, code-word check, risk scan or callback); the model picks which.
-    content = (await runToolLoop(client, req, execute, 8, "required")).content;
+    content = (await runToolLoop(client, req, execute, 4, "required")).content;
   } catch (err) {
     // A model that keeps calling tools, or answers empty, gets one repair request below. Network errors still throw.
     if (!(err instanceof LlmError) || !/kept calling tools|empty reply/.test(err.message)) throw err;

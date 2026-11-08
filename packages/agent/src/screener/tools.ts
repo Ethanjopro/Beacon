@@ -107,7 +107,7 @@ function lookupTrusted(ctx: ScreenCtx, claim: string): unknown {
   // unrelated contact (a "carrier agent" became "Mom") and challenge/callback the wrong person.
   if (!callerNamed(ctx, contact)) {
     ctx.emit({ type: "tool", name, status: "result", summary: "The caller hasn't claimed to be one of the subscriber's contacts" });
-    return { found: false, note: "The caller has not claimed to be this contact. Only challenge a contact the caller names." };
+    return { found: false, note: "The caller has not claimed to be any of the subscriber's contacts. Do not look up other contacts; judge what the caller is asking for." };
   }
   ctx.claimed ??= contact;
   const hasCodeWord = Boolean(contact.safeWord?.trim());
