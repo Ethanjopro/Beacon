@@ -1,5 +1,6 @@
 import {
   API,
+  CreatedCall,
   CreatedEvent,
   EventDetail,
   HealthResponse,
@@ -7,6 +8,7 @@ import {
   ScenarioSummary,
   VerificationOutcome,
   VerificationRequest,
+  type NewCall,
   type ReplyBody,
 } from "@beacon/shared";
 import { z } from "zod";
@@ -59,6 +61,8 @@ export function createApi(fetchImpl: FetchLike = (input, init) => fetch(input, i
     replyToVerification: (id: string, body: ReplyBody) =>
       request(fetchImpl, API.verificationReply(id), VerificationOutcome, post(body)),
     reset: () => request(fetchImpl, API.reset, Ok, post()),
+    startCall: (body: NewCall) => request(fetchImpl, API.calls, CreatedCall, post(body)),
+    say: (callId: string, text: string) => request(fetchImpl, API.callSay(callId), Ok, post({ text })),
   };
 }
 

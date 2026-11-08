@@ -1,3 +1,4 @@
+import type { NewCall } from "@beacon/shared";
 import { createApi, type BeaconApi } from "../lib/api";
 import { openTraceStream } from "../lib/stream";
 import { onDemoReset, broadcastDemoReset } from "./resetChannel";
@@ -29,6 +30,10 @@ export class LiveBackend implements Backend {
   contacts = () => this.api.contacts();
   scenarios = () => this.api.scenarios();
   fire = (id: string) => this.api.fireScenario(id);
+  startCall = (call: NewCall) => this.api.startCall(call);
+  async say(callId: string, text: string): Promise<void> {
+    await this.api.say(callId, text);
+  }
   pendingVerifications = () => this.api.pendingVerifications();
 
   async reply(requestId: string, text: string, from?: string): Promise<void> {

@@ -78,7 +78,9 @@ function ProtectionCard({ status, mock, checked, stopped }: { status: string; mo
 }
 
 function ConversationRow({ c, onOpen }: { c: Conversation; onOpen: () => void }) {
-  const verdict = c.latest?.verdict;
+  // Screened calls carry a call verdict (VERIFIED/SUSPICIOUS/SCAM), texts the classic one.
+  const screening = c.latest?.screening?.verdict.verdict;
+  const verdict = c.latest?.verdict ?? (screening ? { label: screening === "SCAM" ? ("scam" as const) : screening === "VERIFIED" ? ("safe" as const) : ("suspicious" as const) } : undefined);
   const checking = c.latest && !verdict;
   const isCall = c.latest?.event?.kind === "call";
   return (

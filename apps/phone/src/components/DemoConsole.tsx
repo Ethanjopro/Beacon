@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { formatHandle, CHANNEL_TEXT } from "../lib/format";
 import { useBeacon } from "../state/store";
 import { VerdictPill } from "./Badges";
+import { JudgePanel } from "./JudgePanel";
 
 /**
  * Demo console (press D, or open #/console in a second window): fire
@@ -95,7 +96,11 @@ export function DemoConsole({ onClose, standalone = false }: { onClose?: () => v
       <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
         {loadError && <p className="mb-4 rounded-xl bg-warn/10 px-4 py-3 text-sm text-warn">{loadError}</p>}
 
-        <h3 className="mb-3 text-[13px] font-bold text-ink-2">Scenarios</h3>
+        <h3 className="mb-1 text-[13px] font-bold text-ink-2">Be the scammer</h3>
+        <p className="mb-3 text-[13px] text-ink-3">Type anything. It goes through the same pipeline as a real call, and Nemotron reacts live.</p>
+        <JudgePanel />
+
+        <h3 className="mb-3 mt-7 text-[13px] font-bold text-ink-2">Scenarios</h3>
         {!scenarios ? (
           <p className="flex items-center gap-2 text-sm text-ink-3">
             <Loader2 size={15} className="animate-spin" /> Loading scenarios…
