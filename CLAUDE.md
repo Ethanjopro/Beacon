@@ -15,8 +15,8 @@ efficiently with Claude Code in this repo.
   `AGENTS.md` (e.g. `@packages/agent/AGENTS.md`). If the task spans lanes, say so
   and propose splitting it — don't silently edit across lanes.
 - **Verify, don't assume.** Before saying something works, run it: `pnpm check`, and for
-  UI work `pnpm dev` + fire a scenario (`pnpm scenario mom-new-number-giftcards`).
-  For the phone UI, take a Playwright screenshot at 390×844 and look at it.
+  UI work `pnpm dev` + fire a call (`pnpm scenario grandson-bail-call`, needs `NVIDIA_API_KEY`).
+  For the phone UI, take a screenshot at 390×844 and look at it.
 - **Subagents / workflows.** Use parallel subagents for independent, lane-disjoint
   work (e.g. "write 10 new scenarios" ∥ "add 3 recovery playbooks"). Prefer cheaper
   models (Sonnet/Haiku) for mechanical work — fixtures, data generation, docs, test
